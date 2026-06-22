@@ -21,14 +21,14 @@
   <style>
 /* ── Theme CSS Variables (auto-switch via body.apex-dark / body.apex-light) ── */
 :root, body.apex-dark {
-  --c-bg:      #09090B;
-  --c-surf:    #111113;
-  --c-surfUp:  #1C1C1F;
-  --c-border:  #2A2A2E;
-  --c-text:    #F4F4F5;
-  --c-sub:     #A1A1AA;
-  --c-muted:   #71717A;
-  --c-lineM:   rgba(6,199,85,.12);
+  --c-bg:      #13141E;
+  --c-surf:    #272838;
+  --c-surfUp:  #2D2E42;
+  --c-border:  #3A3B54;
+  --c-text:    #FFFFFF;
+  --c-sub:     #A0A0B5;
+  --c-muted:   #75768C;
+  --c-lineM:   rgba(0,195,0,.12);
 }
 body.apex-light {
   --c-bg:      #F8FAFC;
@@ -96,18 +96,23 @@ body.apex-light {
     }
     /* ── Dark mode override ─────────────────────────────────────────── */
     body.apex-dark {
-      --apex-bg:       #09090B;
-      --apex-surf:     #18181B;
-      --apex-surf-up:  #1F1F23;
-      --apex-border:   #27272A;
-      --apex-text:     #FAFAFA;
-      --apex-muted:    #71717A;
-      --apex-sub:      #A1A1AA;
-      --apex-shadow-sm: 0 1px 3px rgba(0,0,0,.18),0 1px 2px rgba(0,0,0,.12);
-      --apex-shadow:   0 4px 14px rgba(0,0,0,.22),0 1px 4px rgba(0,0,0,.14);
-      --apex-shadow-lg: 0 10px 32px rgba(0,0,0,.28),0 4px 10px rgba(0,0,0,.18);
-      --apex-shadow-orange: 0 4px 18px rgba(249,115,22,.30);
-    }
+  --apex-bg:       #13141E;
+  --apex-surf:     #272838;
+  --apex-surf-up:  #2D2E42;
+  --apex-border:   #3A3B54;
+  --apex-text:     #FFFFFF;
+  --apex-muted:    #75768C;
+  --apex-sub:      #A0A0B5;
+  --apex-shadow-sm: 0 4px 10px rgba(0,0,0,.20);
+  --apex-shadow:   0 8px 24px rgba(0,0,0,.30);
+  --apex-shadow-lg: 0 12px 32px rgba(0,0,0,.40);
+  --apex-shadow-orange: 0 6px 20px rgba(254,74,101,.35);
+  
+  /* ตัวแปรสีส้มจะถูกเขียนทับด้วย Coral Red ในโหมดมืด */
+  --apex-orange:      #FE4A65;
+  --apex-orange-d:    #E03A52;
+  --apex-orange-glow: rgba(254,74,101,.30);
+}
 
     /* ── Base resets ─────────────────────────────────────────────────── */
     *, *::before, *::after { box-sizing: border-box; }
