@@ -1453,28 +1453,104 @@ function AdminDashboard({ members, sessions, classes, guestBookings }) {
   const inactive = members.filter((m) => ["expired", "no_credits", "no_membership"].includes(memberStatus(m))).length;
   const bkMonthly    = Object.values(sessions).reduce((n,s)=>n+s.bk.filter(mid=>{ const m=members.find(x=>x.id===mid); return m && normMembershipType(m.membershipType)==="monthly"; }).length, 0);
   const bkPerSession = Object.values(sessions).reduce((n,s)=>n+s.bk.filter(mid=>{ const m=members.find(x=>x.id===mid); return m && normMembershipType(m.membershipType)==="per_session"; }).length, 0);
-  const bkGuest      = Array.isArray(guestBookings) ? guestBookings.length : 0;
-  const classChart = classes.slice(0, 5).map((c) => {
-    const cl = Object.values(sessions).filter((s) => s.cid === c.id);
-    return { name: c.ico + " " + (c.name.length > 9 ? c.name.slice(0, 9) + "..." : c.name), \u0E08\u0E2D\u0E07: cl.reduce((n, s) => n + s.bk.length, 0), \u0E2A\u0E33\u0E23\u0E2D\u0E07: cl.reduce((n, s) => n + s.wl.length, 0) };
+  const bkGuest = Array.isArray(guestBookings) ? guestBookings.length : 0;
+  const totalBkAll = totalBk + bkGuest;
+
+  // chart: นับทั้ง member bookings + guest bookings ต่อคลาส
+  const classChart = classes.slice(0, 6).map((cls) => {
+    const cl = Object.values(sessions).filter((s) => s.cid === cls.id);
+    const memberBk = cl.reduce((n, s) => n + s.bk.length, 0);
+    const guestBk  = Array.isArray(guestBookings) ? guestBookings.filter((g) => cl.some((s) => s.id === (g.sessionId || g.session_id))).length : 0;
+    return {
+      name: cls.ico + " " + (cls.name.length > 8 ? cls.name.slice(0, 8) + "…" : cls.name),
+      จอง: memberBk + guestBk,
+      สำรอง: cl.reduce((n, s) => n + s.wl.length, 0),
+    };
   });
-  const pieData = [{ name: "Active", value: active, color: C.green }, { name: "\u0E23\u0E30\u0E07\u0E31\u0E1A", value: susp, color: C.red }, { name: "\u0E2B\u0E21\u0E14\u0E2D\u0E32\u0E22\u0E38", value: inactive, color: C.amber }].filter((d) => d.value > 0);
+
   const trend = [...Array(7)].map((_, i) => {
     const d = shift(TODAY, -6 + i);
-    return { day: `${d.getDate()}/${d.getMonth() + 1}`, \u0E01\u0E32\u0E23\u0E08\u0E2D\u0E07: Object.values(sessions).filter((s) => s.date === fmt(d)).reduce((n, s) => n + s.bk.length, 0) };
+    return { day: `${d.getDate()}/${d.getMonth() + 1}`, การจอง: Object.values(sessions).filter((s) => s.date === fmt(d)).reduce((n, s) => n + s.bk.length, 0) };
   });
-  return /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 } }, [{ lb: "\u0E04\u0E25\u0E32\u0E2A\u0E27\u0E31\u0E19\u0E19\u0E35\u0E49", v: todayS.length, ic: NAV_ICONS.schedule, cl: C.orange }, { lb: "\u0E08\u0E2D\u0E07\u0E17\u0E31\u0E49\u0E07\u0E2B\u0E21\u0E14", v: totalBk, ic: NAV_ICONS.myBookings, cl: C.green }, { lb: "\u0E17\u0E35\u0E48\u0E19\u0E31\u0E48\u0E07\u0E2A\u0E33\u0E23\u0E2D\u0E07", v: totalWL, ic: "\u{1FA91}", cl: C.amber }, { lb: "\u0E2A\u0E21\u0E32\u0E0A\u0E34\u0E01", v: members.length, ic: NAV_ICONS.members, cl: C.blue }, { lb: "Active", v: active, ic: NAV_ICONS.attend, cl: C.green }, { lb: "\u0E16\u0E39\u0E01\u0E23\u0E30\u0E07\u0E31\u0E1A", v: susp, ic: "\u{1F6AB}", cl: susp > 0 ? C.red : C.muted }].map((x) => /* @__PURE__ */ React.createElement("div", { key: x.lb, style: { background: C.surf, borderRadius: 14, border: `1px solid ${C.border}`, padding: "16px 14px" } }, /* @__PURE__ */ (typeof x.ic === "string" && x.ic.startsWith("<svg") ? React.createElement("div", { style: { display: "flex", justifyContent: "center", marginBottom: 6 }, dangerouslySetInnerHTML: { __html: x.ic } }) : React.createElement("div", { style: { fontSize: 20, marginBottom: 6, textAlign: "center" } }, x.ic)), /* @__PURE__ */ React.createElement("div", { style: { color: x.cl, fontWeight: 900, fontSize: 26 } }, x.v), /* @__PURE__ */ React.createElement("div", { style: { color: C.muted, fontSize: 11, marginTop: 3 } }, x.lb)))), /* @__PURE__ */ React.createElement("div", { style: { background: C.surf, borderRadius: 14, border: `1px solid ${C.border}`, padding: 16, marginBottom: 14 } }, /* @__PURE__ */ React.createElement("div", { style: { color: C.text, fontWeight: 700, marginBottom: 12, fontSize: 14 } }, "\u{1F4CA} \u0E01\u0E32\u0E23\u0E08\u0E2D\u0E07\u0E15\u0E48\u0E2D\u0E04\u0E25\u0E32\u0E2A"), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 14, marginBottom: 8 } }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 4 } }, /* @__PURE__ */ React.createElement("div", { style: { width: 10, height: 10, borderRadius: 2, background: C.orange } }), /* @__PURE__ */ React.createElement("span", { style: { fontSize: 10, color: C.muted } }, "\u0E08\u0E2D\u0E07")), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 4 } }, /* @__PURE__ */ React.createElement("div", { style: { width: 10, height: 10, borderRadius: 2, background: C.amber } }), /* @__PURE__ */ React.createElement("span", { style: { fontSize: 10, color: C.muted } }, "\u0E2A\u0E33\u0E23\u0E2D\u0E07"))), /* @__PURE__ */ React.createElement(BarChartSimple, { data: classChart })), /* @__PURE__ */ React.createElement("div", { style: { background: C.surf, borderRadius: 14, border: `1px solid ${C.border}`, padding: 16, marginBottom: 14 } },
-    /* @__PURE__ */ React.createElement("div", { style: { color: C.text, fontWeight: 700, marginBottom: 14, fontSize: 14 } }, "\u{1F3AB} ประเภทการจองทั้งหมด"),
-    [
-      ["\u{1F4C5} สมาชิกรายเดือน", bkMonthly, C.orange],
-      ["\u{1F39F}️ สมาชิกรายครั้ง", bkPerSession, C.blue],
-      ["\u{1F4B0} จ่ายเงินรายครั้ง", bkGuest, C.green],
-    ].map(([lb, v, col]) => /* @__PURE__ */ React.createElement("div", { key: lb, style: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: `1px solid ${C.border}` } },
-      /* @__PURE__ */ React.createElement("span", { style: { color: C.sub, fontSize: 13 } }, lb),
-      /* @__PURE__ */ React.createElement("span", { style: { color: col, fontWeight: 900, fontSize: 18 } }, v)
-    ))
-  ), /* @__PURE__ */ React.createElement("div", { style: { background: C.surf, borderRadius: 14, border: `1px solid ${C.border}`, padding: 16, marginBottom: 14 } }, /* @__PURE__ */ React.createElement("div", { style: { color: C.text, fontWeight: 700, marginBottom: 12, fontSize: 14 } }, "\u{1F4C8} \u0E40\u0E17\u0E23\u0E19\u0E14\u0E4C 7 \u0E27\u0E31\u0E19\u0E25\u0E48\u0E32\u0E2A\u0E38\u0E14"), /* @__PURE__ */ React.createElement(LineChartSimple, { data: trend })), /* @__PURE__ */ React.createElement("div", { style: { background: C.surf, borderRadius: 14, border: `1px solid ${C.border}`, padding: 16, marginBottom: 14 } }, /* @__PURE__ */ React.createElement("div", { style: { color: C.text, fontWeight: 700, marginBottom: 12, fontSize: 14 } }, "\u{1F465} \u0E2A\u0E16\u0E32\u0E19\u0E30\u0E2A\u0E21\u0E32\u0E0A\u0E34\u0E01"), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 16 } }, /* @__PURE__ */ React.createElement(PieChartSimple, { data: pieData }), /* @__PURE__ */ React.createElement("div", { style: { flex: 1 } }, pieData.map((d) => /* @__PURE__ */ React.createElement("div", { key: d.name, style: { display: "flex", justifyContent: "space-between", padding: "5px 0", borderBottom: `1px solid ${C.border}` } }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 8 } }, /* @__PURE__ */ React.createElement("div", { style: { width: 10, height: 10, borderRadius: "50%", background: d.color } }), /* @__PURE__ */ React.createElement("span", { style: { color: C.muted, fontSize: 13 } }, d.name)), /* @__PURE__ */ React.createElement("span", { style: { color: d.color, fontWeight: 700 } }, d.value)))))), /* @__PURE__ */ React.createElement("div", { style: { color: C.muted, fontSize: 11, fontWeight: 700, letterSpacing: 2, marginBottom: 10 } }, "\u0E04\u0E25\u0E32\u0E2A\u0E27\u0E31\u0E19\u0E19\u0E35\u0E49"), todayS.sort((a, b) => a.t.localeCompare(b.t)).map((s) => /* @__PURE__ */ React.createElement("div", { key: s.id, style: { background: C.surf, borderRadius: 12, border: `1px solid ${C.border}`, padding: 14, marginBottom: 8 } }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center" } }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("div", { style: { color: C.text, fontWeight: 700 } }, s.ico, " ", s.name), /* @__PURE__ */ React.createElement("div", { style: { color: C.muted, fontSize: 12 } }, s.t, " \xB7 ", s.ins)), /* @__PURE__ */ React.createElement(Pill, { text: `${s.bk.length}/${s.cap}`, color: s.col, bg: `${s.col}18` })), /* @__PURE__ */ React.createElement("div", { style: { marginTop: 8 } }, /* @__PURE__ */ React.createElement(CapBar, { n: s.bk.length, cap: s.cap, col: s.col }), /* @__PURE__ */ React.createElement(WLBar, { n: s.wl.length, cap: s.wlCap })))));
+
+  // stat rows
+  const topStats = [
+    { lb: "คลาสวันนี้", v: todayS.length, ic: "📅", cl: C.orange },
+    { lb: "จองทั้งหมด", v: totalBkAll, ic: "🎟️", cl: C.green },
+    { lb: "สำรอง", v: totalWL, ic: "🪑", cl: C.amber },
+  ];
+  const midStats = [
+    { lb: "สมาชิกทั้งหมด", v: members.length, ic: "👥", cl: C.blue },
+    { lb: "Active", v: active, ic: "✅", cl: C.green },
+    { lb: "ถูกระงับ", v: susp, ic: "🚫", cl: susp > 0 ? C.red : C.muted },
+  ];
+  const bkStats = [
+    { lb: "รายเดือน", v: bkMonthly, cl: C.orange },
+    { lb: "รายครั้ง(สมาชิก)", v: bkPerSession, cl: C.blue },
+    { lb: "Walk-in/Guest", v: bkGuest, cl: C.green },
+  ];
+
+  const StatCard = ({ ic, lb, v, cl: col }) =>
+    /* @__PURE__ */ React.createElement("div", { style: { background: C.surf, borderRadius: 14, border: `1px solid ${C.border}`, padding: "12px 14px", display: "flex", alignItems: "center", gap: 12 } },
+      /* @__PURE__ */ React.createElement("div", { style: { fontSize: 26, lineHeight: 1, flexShrink: 0 } }, ic),
+      /* @__PURE__ */ React.createElement("div", null,
+        /* @__PURE__ */ React.createElement("div", { style: { color: col, fontWeight: 900, fontSize: 22, lineHeight: 1 } }, v),
+        /* @__PURE__ */ React.createElement("div", { style: { color: C.muted, fontSize: 11, marginTop: 3 } }, lb)
+      )
+    );
+
+  return /* @__PURE__ */ React.createElement("div", null,
+    /* @__PURE__ */ React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 10 } },
+      topStats.map((x) => /* @__PURE__ */ React.createElement(StatCard, { key: x.lb, ...x }))
+    ),
+    /* @__PURE__ */ React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 14 } },
+      midStats.map((x) => /* @__PURE__ */ React.createElement(StatCard, { key: x.lb, ...x }))
+    ),
+    /* @__PURE__ */ React.createElement("div", { style: { background: C.surf, borderRadius: 14, border: `1px solid ${C.border}`, padding: "12px 16px", marginBottom: 14 } },
+      /* @__PURE__ */ React.createElement("div", { style: { color: C.muted, fontSize: 11, fontWeight: 700, marginBottom: 10, letterSpacing: 1 } }, "🎫 ประเภทการจอง"),
+      /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 0 } },
+        bkStats.map((x, i) =>
+          /* @__PURE__ */ React.createElement("div", { key: x.lb, style: { flex: 1, textAlign: "center", borderRight: i < 2 ? `1px solid ${C.border}` : "none", padding: "4px 0" } },
+            /* @__PURE__ */ React.createElement("div", { style: { color: x.cl, fontWeight: 900, fontSize: 20 } }, x.v),
+            /* @__PURE__ */ React.createElement("div", { style: { color: C.muted, fontSize: 10, marginTop: 2 } }, x.lb)
+          )
+        )
+      )
+    ),
+    /* @__PURE__ */ React.createElement("div", { style: { background: C.surf, borderRadius: 14, border: `1px solid ${C.border}`, padding: 16, marginBottom: 14 } },
+      /* @__PURE__ */ React.createElement("div", { style: { color: C.text, fontWeight: 700, marginBottom: 10, fontSize: 14 } }, "\u{1F4CA} การจองต่อคลาส"),
+      /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 14, marginBottom: 8 } },
+        /* @__PURE__ */ React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 4 } },
+          /* @__PURE__ */ React.createElement("div", { style: { width: 10, height: 10, borderRadius: 2, background: C.orange } }),
+          /* @__PURE__ */ React.createElement("span", { style: { fontSize: 10, color: C.muted } }, "จอง (รวม Guest)")
+        ),
+        /* @__PURE__ */ React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 4 } },
+          /* @__PURE__ */ React.createElement("div", { style: { width: 10, height: 10, borderRadius: 2, background: C.amber } }),
+          /* @__PURE__ */ React.createElement("span", { style: { fontSize: 10, color: C.muted } }, "สำรอง")
+        )
+      ),
+      /* @__PURE__ */ React.createElement(BarChartSimple, { data: classChart })
+    ),
+    /* @__PURE__ */ React.createElement("div", { style: { color: C.muted, fontSize: 11, fontWeight: 700, letterSpacing: 2, marginBottom: 10 } }, "คลาสวันนี้"),
+    todayS.length === 0 && /* @__PURE__ */ React.createElement("div", { style: { textAlign: "center", color: C.muted, padding: "20px 0", fontSize: 13 } }, "ไม่มีคลาสวันนี้"),
+    todayS.sort((a, b) => a.t.localeCompare(b.t)).map((s) =>
+      /* @__PURE__ */ React.createElement("div", { key: s.id, style: { background: C.surf, borderRadius: 12, border: `1px solid ${C.border}`, padding: 14, marginBottom: 8 } },
+        /* @__PURE__ */ React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center" } },
+          /* @__PURE__ */ React.createElement("div", null,
+            /* @__PURE__ */ React.createElement("div", { style: { color: C.text, fontWeight: 700 } }, s.ico, " ", s.name),
+            /* @__PURE__ */ React.createElement("div", { style: { color: C.muted, fontSize: 12 } }, s.t, " · ", s.ins)
+          ),
+          /* @__PURE__ */ React.createElement(Pill, { text: `${s.bk.length}/${s.cap}`, color: s.col, bg: `${s.col}18` })
+        ),
+        /* @__PURE__ */ React.createElement("div", { style: { marginTop: 8 } },
+          /* @__PURE__ */ React.createElement(CapBar, { n: s.bk.length, cap: s.cap, col: s.col }),
+          /* @__PURE__ */ React.createElement(WLBar, { n: s.wl.length, cap: s.wlCap })
+        )
+      )
+    )
+  );
 }
+
 function KioskView({ members, sessions, onKioskBook, onKioskCheckin, showToast }) {
   const [phone, setPhone] = useState("");
   const [found, setFound] = useState(undefined);
