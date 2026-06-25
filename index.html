@@ -2618,6 +2618,9 @@ function App() {
                   joinDate: m.joinDate ? String(m.joinDate).replace(/T.*/,"") : "",
                   photoUrl: m.photoUrl ? String(m.photoUrl) : "",
                   lineUserId: m.lineUserId ? String(m.lineUserId) : "",
+                  noShowDates: m.noShowDates ? String(m.noShowDates) : "",
+                  penaltyLevel: m.penaltyLevel !== undefined && m.penaltyLevel !== "" ? Number(m.penaltyLevel) : 0,
+                  wlOptIn: m.wlOptIn === true || String(m.wlOptIn).toUpperCase() === "TRUE",
                 };
               });
               _sheetsMembers = _normalizedMembers;
@@ -3172,6 +3175,9 @@ function App() {
                 joinDate: m.joinDate ? String(m.joinDate).replace(/T.*/,"") : "",
                 photoUrl: m.photoUrl ? String(m.photoUrl) : "",
                 lineUserId: m.lineUserId ? String(m.lineUserId) : "",
+                noShowDates: m.noShowDates ? String(m.noShowDates) : "",
+                penaltyLevel: m.penaltyLevel !== undefined && m.penaltyLevel !== "" ? Number(m.penaltyLevel) : 0,
+                wlOptIn: m.wlOptIn === true || String(m.wlOptIn).toUpperCase() === "TRUE",
               };
             }));
             await store.set("apex_members", _d.members);
