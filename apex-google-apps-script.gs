@@ -428,6 +428,7 @@ function doPost(e) {
     if (action === "saveStaff")             return json(handleSaveStaff(data));
     if (action === "deleteStaff")           return json(handleDeleteStaff(data));
     if (action === "changeAdminPin")        return json(handleChangeAdminPin(data));
+    if (action === "toggleWlOptIn")         return json(handleToggleWlOptIn(data));
     return json({ error: "Unknown POST action: " + action });
   } catch(err) { return json({ error: err.toString() }); }
 }
@@ -669,6 +670,32 @@ function handleChangeAdminPin(d) {
   if (clash) return { ok: false, error: "PIN นี้ถูกใช้โดยพนักงาน " + clash.name + " อยู่แล้ว" };
   PropertiesService.getScriptProperties().setProperty("ADMIN_PIN_OVERRIDE", String(d.newPin));
   return { ok: true };
+}
+
+// ════════════════════════════════════════════════════════
+// 🔔 Toggle wlOptIn (Last-minute reserve opt-in) per member
+// ════════════════════════════════════════════════════════
+function handleToggleWlOptIn(d) {
+  if (!d.memberId) return { ok: false, error: "ไม่ระบุ memberId" };
+  var sh = getSheet(SHEETS.MEMBERS);
+  if (!sh) return { ok: false, error: "ไม่พบ sheet Members" };
+  var all = sh.getDataRange().getValues();
+  var headers = all[0];
+  var idCol = headers.indexOf("id");
+  var wlCol = headers.indexOf("wlOptIn");
+  if (idCol < 0) return { ok: false, error: "ไม่พบ column id" };
+  if (wlCol < 0) {
+    wlCol = headers.length;
+    sh.getRange(1, wlCol + 1).setValue("wlOptIn");
+  }
+  var newVal = (d.value === true || d.value === "true");
+  for (var i = 1; i < all.length; i++) {
+    if (String(all[i][idCol]) === String(d.memberId)) {
+      sh.getRange(i + 1, wlCol + 1).setValue(newVal);
+      return { ok: true, wlOptIn: newVal };
+    }
+  }
+  return { ok: false, error: "ไม่พบสมาชิก" };
 }
 
 function handleLogin(phone, pin, deviceId) {
