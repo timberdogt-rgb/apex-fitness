@@ -429,6 +429,8 @@ function doPost(e) {
     if (action === "deleteStaff")           return json(handleDeleteStaff(data));
     if (action === "changeAdminPin")        return json(handleChangeAdminPin(data));
     if (action === "toggleWlOptIn")         return json(handleToggleWlOptIn(data));
+    if (action === "rescheduleSession")     return json(handleRescheduleSession(data));  // ✅ [v4.4]
+    if (action === "setupReminderTrigger")  return json(handleSetupReminderTrigger(data));  // ✅ [v4.4]
     return json({ error: "Unknown POST action: " + action });
   } catch(err) { return json({ error: err.toString() }); }
 }
@@ -684,6 +686,7 @@ function handleToggleWlOptIn(d) {
   var idCol = headers.indexOf("id");
   var wlCol = headers.indexOf("wlOptIn");
   if (idCol < 0) return { ok: false, error: "ไม่พบ column id" };
+  // ถ้ายังไม่มี column wlOptIn ให้เพิ่มเลย
   if (wlCol < 0) {
     wlCol = headers.length;
     sh.getRange(1, wlCol + 1).setValue("wlOptIn");
@@ -1091,6 +1094,115 @@ function incrementNoShow_v1(mid) {
   }
   return { suspended:false };
 }
+function incrementNoShow(mid) { return incrementNoShow_v1(mid); }
+
+// ════════════════════════════════════════════════════════
+// 👤 MEMBER MANAGEMENT — handleSaveMember + handleUnlockDevice
+// ════════════════════════════════════════════════════════
+function handleSaveMember(d) {
+  var sh = getSheet(SHEETS.MEMBERS);
+  var data = sh.getDataRange().getValues();
+  var headers = data[0];
+  // ["id","name","phone","pin","lineId","membershipType","membershipExpiry","sessionsLeft","noShowCount","suspended","suspendedUntil","deviceId","joinDate","photoUrl","lineUserId"]
+  var colMap = {};
+  headers.forEach(function(h, i) { colMap[h] = i; });
+
+  // Handle base64 photoUrl upload
+  var updatedUrls = {};
+  if (d.photoUrl && String(d.photoUrl).indexOf("base64,") !== -1) {
+    var b64 = d.photoUrl.split("base64,")[1];
+    var ext = d.photoUrl.indexOf("png") !== -1 ? "png" : "jpg";
+    var url = saveBase64Image(b64, "member_" + (d.id || Date.now()) + "." + ext);
+    if (url) { d.photoUrl = url; updatedUrls.photoUrl = url; }
+  }
+
+  // Find existing row
+  var idCol = colMap["id"];
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][idCol]) === String(d.id)) {
+      // Update each field that's provided
+      var fields = ["name","phone","pin","lineId","membershipType","membershipExpiry","sessionsLeft","noShowCount","suspended","suspendedUntil","photoUrl","lineUserId"];
+      fields.forEach(function(f) {
+        if (d[f] !== undefined && colMap[f] !== undefined) {
+          sh.getRange(i + 1, colMap[f] + 1).setValue(d[f]);
+        }
+      });
+      return { ok: true, updated: true, updatedUrls: updatedUrls };
+    }
+  }
+
+  // New member
+  var newId = d.id || ("M" + Date.now());
+  var joinDate = d.joinDate || Utilities.formatDate(new Date(), "GMT+7", "yyyy-MM-dd");
+  var row = headers.map(function(h) {
+    if (h === "id") return newId;
+    if (h === "joinDate") return joinDate;
+    if (h === "noShowCount") return 0;
+    if (h === "suspended") return false;
+    return d[h] !== undefined ? d[h] : "";
+  });
+  sh.appendRow(row);
+  return { ok: true, created: true, id: newId, updatedUrls: updatedUrls };
+}
+
+function handleUnlockDevice(d) {
+  if (!d.memberId) return { ok: false, error: "ไม่ระบุ memberId" };
+  var sh = getSheet(SHEETS.MEMBERS);
+  var data = sh.getDataRange().getValues();
+  var headers = data[0];
+  var idCol = headers.indexOf("id");
+  var deviceCol = headers.indexOf("deviceId");
+  if (deviceCol === -1) return { ok: false, error: "ไม่พบ column deviceId" };
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][idCol]) === String(d.memberId)) {
+      sh.getRange(i + 1, deviceCol + 1).setValue("");
+      return { ok: true };
+    }
+  }
+  return { ok: false, error: "ไม่พบสมาชิก" };
+}
+
+// ════════════════════════════════════════════════════════
+// ⚙️ SETTINGS — handleSaveSettings
+// รับ { settings: { key: value, ... } } เขียนลง Settings sheet
+// ════════════════════════════════════════════════════════
+function handleSaveSettings(d) {
+  if (!d.settings) return { ok: false, error: "missing settings" };
+  var ssh = getSheet(SHEETS.SETTINGS);
+  var sdata = ssh.getDataRange().getValues();
+
+  // Build current key→row map
+  var rowMap = {};
+  for (var i = 1; i < sdata.length; i++) {
+    rowMap[String(sdata[i][0])] = i + 1; // 1-based row
+  }
+
+  var IMAGE_KEYS = ["gymLogo", "gymLogoWhite", "scheduleImage"];
+  var updatedUrls = {};
+
+  Object.keys(d.settings).forEach(function(key) {
+    var val = d.settings[key];
+
+    // Upload base64 images to Drive
+    if (IMAGE_KEYS.indexOf(key) !== -1 && val && String(val).indexOf("base64,") !== -1) {
+      var b64 = String(val).split("base64,")[1];
+      var ext = String(val).indexOf("png") !== -1 ? "png" : "jpg";
+      var url = saveBase64Image(b64, key + "_" + Date.now() + "." + ext);
+      if (url) { val = url; updatedUrls[key] = url; }
+    }
+
+    var strVal = (val === null || val === undefined) ? "" : String(val);
+    if (rowMap[key]) {
+      ssh.getRange(rowMap[key], 2).setValue(strVal);
+    } else {
+      ssh.appendRow([key, strVal]);
+      rowMap[key] = ssh.getLastRow(); // keep map current
+    }
+  });
+
+  Logger.log("[saveSettings] updated " + Object.keys(d.settings).length + " keys");
+  return { ok: true, updatedUrls: updatedUrls };
+}
 
 // ════════════════════════════════════════════════════════
 // 👥 MEMBER MANAGEMENT
@@ -1370,4 +1482,125 @@ function setupTriggers() {
   ScriptApp.newTrigger("sendExpiryReminders").timeBased().everyDays(1).atHour(9).create();
   Logger.log("✅ Triggers setup done");
   try { SpreadsheetApp.getUi().alert("✅ ตั้ง Triggers สำเร็จ!"); } catch(e) {}
+}
+
+// ════════════════════════════════════════════════════════
+// 📅 [v4.4] RESCHEDULE SESSION
+// POST { action:"rescheduleSession", sessionId, newDate, staffId }
+// ════════════════════════════════════════════════════════
+function handleRescheduleSession(d) {
+  if (!d.sessionId || !d.newDate) return { ok: false, error: "missing sessionId or newDate" };
+
+  var found = findSessionRow(d.sessionId);
+  if (!found) return { ok: false, error: "ไม่พบ session: " + d.sessionId };
+
+  var classId  = found.data[1];
+  var oldDate  = found.data[2];
+  var bookings = parseList(found.data[3]);
+
+  // ตรวจว่า newDate ไม่ซ้ำกับ session ที่มีอยู่แล้ว
+  var existingNew = findSessionRow(classId + "_" + d.newDate);
+  if (existingNew) return { ok: false, error: "มี session " + classId + " วันที่ " + d.newDate + " อยู่แล้ว" };
+
+  // อัปเดต Sessions sheet
+  var sh = getSheet(SHEETS.SESSIONS);
+  var newSessionId = classId + "_" + d.newDate;
+  sh.getRange(found.row, 1).setValue(newSessionId);
+  sh.getRange(found.row, 3).setValue(d.newDate);
+
+  // อัปเดต Bookings sheet — เปลี่ยน sessionId ในแถวที่ตรงกัน
+  var bsh = getSheet(SHEETS.BOOKINGS);
+  var bdata = bsh.getDataRange().getValues();
+  var bHeaders = bdata[0]; // ["id","sessionId","memberId","type","createdAt"]
+  var sesCol = bHeaders.indexOf("sessionId");
+  for (var i = 1; i < bdata.length; i++) {
+    if (String(bdata[i][sesCol]) === String(d.sessionId)) {
+      bsh.getRange(i + 1, sesCol + 1).setValue(newSessionId);
+    }
+  }
+
+  // แจ้งเตือนสมาชิกที่จองไว้
+  var cls = readSheet(SHEETS.CLASSES).filter(function(c){ return c.id === classId; })[0];
+  var className = cls ? cls.name : classId;
+  var allMembers = readSheet(SHEETS.MEMBERS);
+  var memberMap = {};
+  allMembers.forEach(function(m){ memberMap[m.id] = m; });
+
+  bookings.forEach(function(mid) {
+    var m = memberMap[mid];
+    if (!m) return;
+    var body = className + " เลื่อนจาก " + oldDate + " เป็น " + d.newDate + "\nรายการจองของคุณยังคงอยู่ครบ!";
+    notify(mid, "reschedule", "📅 คลาสถูกเลื่อนวัน", body);
+    if (m.lineUserId) pushLineMessage(m.lineUserId, "📅 Apex Fitness\n" + body);
+  });
+
+  Logger.log("[Reschedule] " + d.sessionId + " -> " + newSessionId + " notified:" + bookings.length);
+  return { ok: true, oldDate: oldDate, newDate: d.newDate, newSessionId: newSessionId, notified: bookings.length };
+}
+
+// ════════════════════════════════════════════════════════
+// ⏰ [v4.4] PRE-CLASS REMINDER
+// sendPreClassReminders() — ให้ Time Trigger เรียกทุก 1 ชั่วโมง
+// POST { action:"setupReminderTrigger", hoursBefore:2 }  — ตั้งหรืออัปเดต trigger
+// ════════════════════════════════════════════════════════
+function sendPreClassReminders() {
+  var settings = readSettingsObj();
+  var hours = parseInt(settings.reminderHoursBefore || "2", 10);
+  if (isNaN(hours) || hours < 1) return;
+
+  var now    = new Date();
+  var target = new Date(now.getTime() + hours * 3600 * 1000);
+  var targetDate = Utilities.formatDate(target, "GMT+7", "yyyy-MM-dd");
+  var targetHour = parseInt(Utilities.formatDate(target, "GMT+7", "HH"), 10);
+
+  var classes = readSheet(SHEETS.CLASSES).filter(function(c){ return c.active; });
+  var allMembers = readSheet(SHEETS.MEMBERS);
+  var memberMap = {};
+  allMembers.forEach(function(m){ memberMap[m.id] = m; });
+
+  classes.forEach(function(cls) {
+    var sid = cls.id + "_" + targetDate;
+    var found = findSessionRow(sid);
+    if (!found) return;
+
+    // ตรวจเวลาคลาส ตรงกับ targetHour ไหม
+    var classHour = parseInt(String(cls.time).split(":")[0], 10);
+    if (classHour !== targetHour) return;
+
+    var bookings = parseList(found.data[3]);
+    bookings.forEach(function(mid) {
+      var m = memberMap[mid];
+      if (!m) return;
+      var body = "คลาส " + cls.name + " เริ่มใน " + hours + " ชั่วโมง (" + cls.time + ")\nอย่าลืมมาออกกำลังกายนะ!";
+      notify(mid, "reminder", "⏰ แจ้งเตือนก่อนคลาส", body);
+      if (m.lineUserId) pushLineMessage(m.lineUserId, "⏰ Apex Fitness\n" + body);
+    });
+    Logger.log("[Reminder] " + sid + " -> notified " + bookings.length + " members");
+  });
+}
+
+function handleSetupReminderTrigger(d) {
+  var hours = parseInt(d.hoursBefore || "2", 10);
+  if (isNaN(hours) || hours < 1 || hours > 24) return { ok: false, error: "hoursBefore ต้องอยู่ระหว่าง 1-24" };
+
+  // บันทึก setting
+  var ssh = getSheet(SHEETS.SETTINGS);
+  var sdata = ssh.getDataRange().getValues();
+  var found = false;
+  for (var i = 1; i < sdata.length; i++) {
+    if (sdata[i][0] === "reminderHoursBefore") {
+      ssh.getRange(i + 1, 2).setValue(String(hours));
+      found = true; break;
+    }
+  }
+  if (!found) ssh.appendRow(["reminderHoursBefore", String(hours)]);
+
+  // ลบ reminder trigger เก่า แล้วสร้างใหม่
+  ScriptApp.getProjectTriggers().forEach(function(t) {
+    if (t.getHandlerFunction() === "sendPreClassReminders") ScriptApp.deleteTrigger(t);
+  });
+  ScriptApp.newTrigger("sendPreClassReminders").timeBased().everyHours(1).create();
+
+  Logger.log("[ReminderTrigger] set hoursBefore=" + hours);
+  return { ok: true, hoursBefore: hours };
 }
