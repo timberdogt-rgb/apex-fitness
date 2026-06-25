@@ -830,7 +830,13 @@ const thFmt = (d) => {
 };
 const nowISO = () => (/* @__PURE__ */ new Date()).toISOString();
 const timeAgo = (iso) => {
-  const diff = Math.floor((Date.now() - new Date(iso).getTime()) / 1e3);
+  if (!iso) return "\u0E44\u0E21\u0E48\u0E17\u0E23\u0E32\u0E1A\u0E27\u0E31\u0E19\u0E17\u0E35\u0E48"; // \u0E44\u0E21\u0E48\u0E17\u0E23\u0E32\u0E1A\u0E27\u0E31\u0E19\u0E17\u0E35\u0E48
+  const t = new Date(iso).getTime();
+  if (isNaN(t)) return "\u0E44\u0E21\u0E48\u0E17\u0E23\u0E32\u0E1A\u0E27\u0E31\u0E19\u0E17\u0E35\u0E48";
+  // 1899-epoch: Sheets time-only cell \u2014 not a real timestamp
+  if (t < -2000000000000) return "\u0E44\u0E21\u0E48\u0E17\u0E23\u0E32\u0E1A\u0E27\u0E31\u0E19\u0E17\u0E35\u0E48";
+  const diff = Math.floor((Date.now() - t) / 1e3);
+  if (diff < 0) return "\u0E40\u0E21\u0E37\u0E48\u0E2D\u0E2A\u0E31\u0E01\u0E04\u0E23\u0E39\u0E48";
   if (diff < 60) return "\u0E40\u0E21\u0E37\u0E48\u0E2D\u0E2A\u0E31\u0E01\u0E04\u0E23\u0E39\u0E48";
   if (diff < 3600) return `${Math.floor(diff / 60)} \u0E19\u0E32\u0E17\u0E35\u0E17\u0E35\u0E48\u0E41\u0E25\u0E49\u0E27`;
   if (diff < 86400) return `${Math.floor(diff / 3600)} \u0E0A\u0E21.\u0E17\u0E35\u0E48\u0E41\u0E25\u0E49\u0E27`;
@@ -1754,7 +1760,7 @@ function AdminAttendance({ sessions, members, guestBookings, onMark, onPromoteWL
           )
         )
       );
-      return /* @__PURE__ */ React.createElement("div", { key: mid, style: { fontSize: 12, color: C.muted, padding: "4px 0" } }, "ID:", mid, " (\u0E44\u0E21\u0E48\u0E1E\u0E1A\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25)");
+      return /* @__PURE__ */ React.createElement("div", { key: mid, style: { display:"flex", alignItems:"center", gap:8, padding:"7px 0", borderBottom:"1px solid "+C.border } }, /* @__PURE__ */ React.createElement("div", { style:{width:34,height:34,borderRadius:"50%",background:C.surfUp,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14} }, "\u{1F464}"), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("div", { style:{color:C.sub,fontSize:13,fontWeight:600} }, "\u{1F464} \u0E2A\u0E21\u0E32\u0E0A\u0E34\u0E01"), /* @__PURE__ */ React.createElement("div", { style:{color:C.muted,fontSize:10} }, "ID: ", String(mid).length > 20 ? "\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E16\u0E39\u0E01\u0E40\u0E02\u0E35\u0E22\u0E19\u0E17\u0E31\u0E1A\u0E43\u0E19 Sheets" : mid)));
     }
     const att = s.att[String(mid).trim()];
     return /* @__PURE__ */ React.createElement("div", { key: mid, onClick: () => setDetailMember(m), style: { cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "9px 0", borderBottom: `1px solid ${C.border}` } }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 10 } }, /* @__PURE__ */ React.createElement("div", { style: { width: 34, height: 34, borderRadius: "50%", background: att === "present" ? C.gM : att === "noshow" ? C.rM : C.surfUp, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14 } }, att === "present" ? "\u2705" : att === "noshow" ? "\u274C" : "\u{1F464}"), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("div", { style: { color: C.text, fontSize: 13, fontWeight: 600 } }, m.name), /* @__PURE__ */ React.createElement("div", { style: { color: C.muted, fontSize: 11 } }, m.phone))), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 5 } }, /* @__PURE__ */ React.createElement("button", { onClick: () => onMark(s.id, mid, "present"), style: { padding: "6px 10px", borderRadius: 7, fontSize: 11, fontWeight: 700, cursor: "pointer", background: att === "present" ? C.green : C.gM, border: `1px solid ${att === "present" ? C.green : "rgba(34,197,94,.3)"}`, color: att === "present" ? "#fff" : C.green, fontFamily: FONT } }, "\u2713 \u0E21\u0E32"), /* @__PURE__ */ React.createElement("button", { onClick: () => onMark(s.id, mid, "noshow"), style: { padding: "6px 10px", borderRadius: 7, fontSize: 11, fontWeight: 700, cursor: "pointer", background: att === "noshow" ? C.red : C.rM, border: `1px solid ${att === "noshow" ? C.red : "rgba(239,68,68,.3)"}`, color: att === "noshow" ? "#fff" : C.red, fontFamily: FONT } }, "\u2717 \u0E44\u0E21\u0E48\u0E21\u0E32")));
