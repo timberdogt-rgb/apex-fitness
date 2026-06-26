@@ -1746,15 +1746,18 @@ function AdminAttendance({ sessions, members, guestBookings, onMark, onPromoteWL
   const [detailMember, setDetailMember] = useState(null); // [BUG#3] click-to-detail
   const [rescheduleModal, setRescheduleModal] = useState(null); // { sessionId, name }
   const [newDateVal, setNewDateVal] = useState("");
+  const [newTimeVal, setNewTimeVal] = useState("");
   const [rescheduling, setRescheduling] = useState(false);
   const doReschedule = async () => {
     if (!newDateVal) return;
     setRescheduling(true);
-    const res = await postAction("rescheduleSession", { sessionId: rescheduleModal.sessionId, newDate: newDateVal }).catch(e => ({ ok: false, error: e.message }));
+    const payload = { sessionId: rescheduleModal.sessionId, newDate: newDateVal };
+    if (newTimeVal) payload.newTime = newTimeVal;
+    const res = await postAction("rescheduleSession", payload).catch(e => ({ ok: false, error: e.message }));
     setRescheduling(false);
     if (res && res.ok) {
       showToast("\u2705 \u0E40\u0E25\u0E37\u0E48\u0E2D\u0E19\u0E27\u0E31\u0E19\u0E41\u0E25\u0E49\u0E27 \u0E41\u0E08\u0E49\u0E07 " + res.notified + " \u0E04\u0E19", "ok");
-      setRescheduleModal(null); setNewDateVal("");
+      setRescheduleModal(null); setNewDateVal(""); setNewTimeVal("");
     } else showToast("\u274C " + ((res && res.error) || "error"), "err");
   };
   const ds = fmt(shift(TODAY, day));
@@ -1794,6 +1797,12 @@ function AdminAttendance({ sessions, members, guestBookings, onMark, onPromoteWL
       /* @__PURE__ */ React.createElement("input", {
         type: "date", value: newDateVal,
         onChange: (e) => setNewDateVal(e.target.value),
+        style: { width: "100%", padding: "10px 12px", background: C.bg, border: "1px solid " + C.border, borderRadius: 9, color: C.text, fontSize: 15, fontFamily: FONT, boxSizing: "border-box", outline: "none", marginBottom: 12 }
+      }),
+      /* @__PURE__ */ React.createElement("div", { style: { color: C.muted, fontSize: 12, fontWeight: 600, marginBottom: 6 } }, "\u0E40\u0E27\u0E25\u0E32\u0E43\u0E2B\u0E21\u0E48 (\u0E44\u0E21\u0E48\u0E1A\u0E31\u0E07\u0E04\u0E31\u0E1A)"),
+      /* @__PURE__ */ React.createElement("input", {
+        type: "time", value: newTimeVal,
+        onChange: (e) => setNewTimeVal(e.target.value),
         style: { width: "100%", padding: "10px 12px", background: C.bg, border: "1px solid " + C.border, borderRadius: 9, color: C.text, fontSize: 15, fontFamily: FONT, boxSizing: "border-box", outline: "none", marginBottom: 16 }
       }),
       /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 10 } },
@@ -1802,10 +1811,11 @@ function AdminAttendance({ sessions, members, guestBookings, onMark, onPromoteWL
       )
     )
   ),
-  /* @__PURE__ */ React.createElement(DayStrip, { sel: day, set: setDay, sessions }), list.length === 0 ? /* @__PURE__ */ React.createElement("div", { style: { textAlign: "center", padding: "40px 0", color: C.muted } }, "\u0E44\u0E21\u0E48\u0E21\u0E35\u0E04\u0E25\u0E32\u0E2A\u0E27\u0E31\u0E19\u0E19\u0E35\u0E49") : list.map((s) => /* @__PURE__ */ React.createElement("div", { key: s.id, style: { background: C.surf, borderRadius: 16, border: `1px solid ${C.border}`, marginBottom: 14, overflow: "hidden" } }, /* @__PURE__ */ React.createElement("div", { style: { height: 3, background: s.col } }), /* @__PURE__ */ React.createElement("div", { style: { padding: 16 } }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 } }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("div", { style: { color: C.text, fontWeight: 700, fontSize: 14 } }, s.ico, " ", s.name), /* @__PURE__ */ React.createElement("div", { style: { color: C.muted, fontSize: 12 } }, s.t, " \xB7 ", s.ins, " \xB7 \u0E2B\u0E25\u0E31\u0E01 ", s.bk.length, "/", s.cap)), /* @__PURE__ */ React.createElement(Pill, { text: `${s.bk.length}/${s.cap}`, color: s.col, bg: `${s.col}18` }), /* @__PURE__ */ React.createElement("button", { onClick: () => { setRescheduleModal({ sessionId: s.id, name: s.name }); setNewDateVal(""); }, style: { padding: "4px 9px", borderRadius: 7, fontSize: 11, fontWeight: 700, cursor: "pointer", background: C.blue + "22", border: "1px solid " + C.blue + "44", color: C.blue, fontFamily: FONT } }, "\u{1F4C5} \u0E40\u0E25\u0E37\u0E48\u0E2D\u0E19"))), s.bk.length === 0 && s.wl.length === 0 && /* @__PURE__ */ React.createElement("div", { style: { color: C.muted, fontSize: 13, textAlign: "center", padding: "8px 0" } }, "\u0E22\u0E31\u0E07\u0E44\u0E21\u0E48\u0E21\u0E35\u0E01\u0E32\u0E23\u0E08\u0E2D\u0E07"), s.bk.map((mid) => {
-    const m = members.find((x) => String(x.id).trim() === String(mid).trim());
+  /* @__PURE__ */ React.createElement(DayStrip, { sel: day, set: setDay, sessions }), list.length === 0 ? /* @__PURE__ */ React.createElement("div", { style: { textAlign: "center", padding: "40px 0", color: C.muted } }, "\u0E44\u0E21\u0E48\u0E21\u0E35\u0E04\u0E25\u0E32\u0E2A\u0E27\u0E31\u0E19\u0E19\u0E35\u0E49") : list.map((s) => /* @__PURE__ */ React.createElement("div", { key: s.id, style: { background: C.surf, borderRadius: 16, border: `1px solid ${C.border}`, marginBottom: 14, overflow: "hidden" } }, /* @__PURE__ */ React.createElement("div", { style: { height: 3, background: s.col } }), /* @__PURE__ */ React.createElement("div", { style: { padding: 16 } }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 } }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("div", { style: { color: C.text, fontWeight: 700, fontSize: 14 } }, s.ico, " ", s.name), /* @__PURE__ */ React.createElement("div", { style: { color: C.muted, fontSize: 12 } }, s.t, " \xB7 ", s.ins, " \xB7 \u0E2B\u0E25\u0E31\u0E01 ", s.bk.length, "/", s.cap)), /* @__PURE__ */ React.createElement(Pill, { text: `${s.bk.length}/${s.cap}`, color: s.col, bg: `${s.col}18` }), /* @__PURE__ */ React.createElement("button", { onClick: () => { setRescheduleModal({ sessionId: s.id, name: s.name }); setNewDateVal(""); setNewTimeVal(""); }, style: { padding: "4px 9px", borderRadius: 7, fontSize: 11, fontWeight: 700, cursor: "pointer", background: C.blue + "22", border: "1px solid " + C.blue + "44", color: C.blue, fontFamily: FONT } }, "\u{1F4C5} \u0E40\u0E25\u0E37\u0E48\u0E2D\u0E19"))), s.bk.length === 0 && s.wl.length === 0 && /* @__PURE__ */ React.createElement("div", { style: { color: C.muted, fontSize: 13, textAlign: "center", padding: "8px 0" } }, "\u0E22\u0E31\u0E07\u0E44\u0E21\u0E48\u0E21\u0E35\u0E01\u0E32\u0E23\u0E08\u0E2D\u0E07"), s.bk.map((mid) => {
+    const mid_s = String(mid).trim();
+    const m = members.find((x) => { const xid = String(x.id||"").trim(); return xid === mid_s || xid === "0"+mid_s || (x.lineUserId && String(x.lineUserId).trim() === mid_s); });
     if (!m) {
-      const g = (guestBookings || []).find((gb) => String(gb.guestId||"").trim() === String(mid).trim() || String(gb.sessionId||"").trim() === String(s.id||"").trim() && String(mid).startsWith("G"));
+      const g = (guestBookings || []).find((gb) => String(gb.guestId||"").trim() === mid_s || String(gb.sessionId||"").trim() === String(s.id||"").trim() && mid_s.startsWith("G"));
       const gAtt = s.att[String(mid).trim()];
       if (g) return /* @__PURE__ */ React.createElement("div", { key: mid, style: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "9px 0", borderBottom: "1px solid " + C.border } },
         /* @__PURE__ */ React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 10 } },
@@ -2753,12 +2763,14 @@ function App() {
                 var _bk = String(s.bookings||"").split(",").map(function(x){return x.trim();}).filter(Boolean);
                 var _wl = String(s.waitlist||"").split(",").map(function(x){return x.trim();}).filter(Boolean);
                 var _t  = s.timeOverride || cls.t || cls.time;
-                // [BUG4-FIX] ถ้ามี session ID ซ้ำ ให้ใช้ตัวที่มี bookings มากกว่า
+                // Dedup: prefer rescheduled row (has timeOverride), then row with more bookings
                 if (_sessionMap[s.id]) {
-                  if (_bk.length > (_sessionMap[s.id].bk||[]).length) {
-                    _sessionMap[s.id].bk = _bk;
-                    _sessionMap[s.id].wl = _wl;
-                    if (s.timeOverride) _sessionMap[s.id].t = _t;
+                  var _prev = _sessionMap[s.id];
+                  if (s.timeOverride && !_prev._hasTO) {
+                    _sessionMap[s.id].t = _t; _sessionMap[s.id]._hasTO = true;
+                    if (_bk.length > 0) { _sessionMap[s.id].bk = _bk; _sessionMap[s.id].wl = _wl; }
+                  } else if (!s.timeOverride && !_prev._hasTO && _bk.length > _prev.bk.length) {
+                    _sessionMap[s.id].bk = _bk; _sessionMap[s.id].wl = _wl;
                   }
                   return;
                 }
@@ -2767,12 +2779,33 @@ function App() {
                   date: String(s.date||"").replace(/T.*/,"").slice(0,10), t: _t, dur: parseInt(cls.dur||cls.duration)||60,
                   cap: parseInt(cls.cap||cls.capacity)||12, wlCap: parseInt(cls.wl||cls.waitlistCap)||8,
                   col, dim: _DIM[col]||"#1a0a00", ico: cls.ico||cls.icon||"🏋️",
-                  bk: _bk, wl: _wl, att: {}
+                  bk: _bk, wl: _wl, att: {}, _hasTO: !!s.timeOverride
                 };
               });
+              // Cross-reference Bookings sheet → populate bk accurately (Sessions.bookings col may be stale)
+              if (_sd.bookings && Array.isArray(_sd.bookings)) {
+                _sd.bookings.forEach(function(bkRow) {
+                  var sid = String(bkRow.sessionId||"").trim();
+                  var mid = String(bkRow.memberId||"").trim();
+                  if (!sid || !mid || !_sessionMap[sid]) return;
+                  var t = String(bkRow.type||"main").trim();
+                  if (t === "main" || t === "") {
+                    if (_sessionMap[sid].bk.indexOf(mid) === -1) _sessionMap[sid].bk.push(mid);
+                  } else if (t === "waitlist") {
+                    if (_sessionMap[sid].wl.indexOf(mid) === -1) _sessionMap[sid].wl.push(mid);
+                  }
+                });
+              }
+              // Cross-reference Attendance sheet → populate att
+              if (_sd.attendance && Array.isArray(_sd.attendance)) {
+                _sd.attendance.forEach(function(a) {
+                  var sid = String(a.sessionId||"").trim();
+                  var mid = String(a.memberId||"").trim();
+                  if (_sessionMap[sid] && mid && a.status) _sessionMap[sid].att[mid] = String(a.status);
+                });
+              }
               if (Object.keys(_sessionMap).length > 0) {
                 _sheetsSessions = _sessionMap;
-                // date already normalized above
                 console.log("✅ Sheets sessions:", Object.keys(_sessionMap).length);
               }
             }
@@ -3331,20 +3364,57 @@ function App() {
             var _pollSe = {};
             _d.sessions.forEach(function(s) {
               var cls = _pClsMap[String(s.classId||"")]; if (!cls) return;
+              var _bk = String(s.bookings||"").split(",").map(function(x){return x.trim();}).filter(Boolean);
+              var _wl = String(s.waitlist||"").split(",").filter(Boolean).map(function(x){return x.trim();});
+              var _t = s.timeOverride || cls.t;
+              // Dedup: prefer rescheduled row (has timeOverride)
+              if (_pollSe[s.id]) {
+                if (s.timeOverride && !_pollSe[s.id]._hasTO) {
+                  _pollSe[s.id].t = _t; _pollSe[s.id]._hasTO = true;
+                  if (_bk.length > 0) { _pollSe[s.id].bk = _bk; _pollSe[s.id].wl = _wl; }
+                } else if (!s.timeOverride && !_pollSe[s.id]._hasTO && _bk.length > _pollSe[s.id].bk.length) {
+                  _pollSe[s.id].bk = _bk; _pollSe[s.id].wl = _wl;
+                }
+                return;
+              }
               _pollSe[s.id] = {
                 id:s.id, cid:cls.id, name:cls.name, ins:cls.ins,
-                date:String(s.date||"").replace(/T.*/,"").slice(0,10), t:cls.t, dur:cls.dur, cap:cls.cap, wlCap:cls.wlCap,
+                date:String(s.date||"").replace(/T.*/,"").slice(0,10), t:_t, dur:cls.dur, cap:cls.cap, wlCap:cls.wlCap,
                 col:cls.col, dim:_pDIM[cls.col]||"#1a0a00", ico:cls.ico,
-                bk:String(s.bookings||"").split(",").map(function(x){return x.trim();}).filter(Boolean),
-                wl:String(s.waitlist||"").split(",").filter(Boolean).map(function(x){return x.trim();}),
-                att:{}
+                bk:_bk, wl:_wl, att:{}, _hasTO:!!s.timeOverride
               };
             });
+            // Cross-reference Bookings sheet for accurate bk
+            if (_d.bookings && Array.isArray(_d.bookings)) {
+              _d.bookings.forEach(function(bkRow) {
+                var sid = String(bkRow.sessionId||"").trim();
+                var mid = String(bkRow.memberId||"").trim();
+                if (!sid || !mid || !_pollSe[sid]) return;
+                var t = String(bkRow.type||"main").trim();
+                if (t === "main" || t === "") {
+                  if (_pollSe[sid].bk.indexOf(mid) === -1) _pollSe[sid].bk.push(mid);
+                } else if (t === "waitlist") {
+                  if (_pollSe[sid].wl.indexOf(mid) === -1) _pollSe[sid].wl.push(mid);
+                }
+              });
+            }
+            // Cross-reference Attendance sheet for accurate att
+            var _pollAtt = {};
+            if (_d.attendance && Array.isArray(_d.attendance)) {
+              _d.attendance.forEach(function(a) {
+                var sid = String(a.sessionId||"").trim();
+                var mid = String(a.memberId||"").trim();
+                if (sid && mid && a.status) {
+                  if (!_pollAtt[sid]) _pollAtt[sid] = {};
+                  _pollAtt[sid][mid] = String(a.status);
+                }
+              });
+            }
             if (Object.keys(_pollSe).length > 0) {
               setSessions(function(prev) {
                 var merged = Object.assign({}, prev);
                 Object.keys(_pollSe).forEach(function(sid) {
-                  merged[sid] = Object.assign({}, _pollSe[sid], { att:(prev[sid]&&prev[sid].att)||{} });
+                  merged[sid] = Object.assign({}, _pollSe[sid], { att: _pollAtt[sid] || (prev[sid]&&prev[sid].att) || {} });
                 });
                 store.set("apex_sessions", merged);
                 return merged;
