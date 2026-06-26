@@ -2750,14 +2750,24 @@ function App() {
                 var cls = _clsMap[String(s.classId||"")];
                 if (!cls) return;
                 var col = cls.col || cls.color || "#F97316";
+                var _bk = String(s.bookings||"").split(",").map(function(x){return x.trim();}).filter(Boolean);
+                var _wl = String(s.waitlist||"").split(",").map(function(x){return x.trim();}).filter(Boolean);
+                var _t  = s.timeOverride || cls.t || cls.time;
+                // [BUG4-FIX] ถ้ามี session ID ซ้ำ ให้ใช้ตัวที่มี bookings มากกว่า
+                if (_sessionMap[s.id]) {
+                  if (_bk.length > (_sessionMap[s.id].bk||[]).length) {
+                    _sessionMap[s.id].bk = _bk;
+                    _sessionMap[s.id].wl = _wl;
+                    if (s.timeOverride) _sessionMap[s.id].t = _t;
+                  }
+                  return;
+                }
                 _sessionMap[s.id] = {
                   id: s.id, cid: cls.id, name: cls.name, ins: cls.ins||cls.instructor,
-                  date: String(s.date||"").replace(/T.*/,"").slice(0,10), t: cls.t||cls.time, dur: parseInt(cls.dur||cls.duration)||60,
+                  date: String(s.date||"").replace(/T.*/,"").slice(0,10), t: _t, dur: parseInt(cls.dur||cls.duration)||60,
                   cap: parseInt(cls.cap||cls.capacity)||12, wlCap: parseInt(cls.wl||cls.waitlistCap)||8,
                   col, dim: _DIM[col]||"#1a0a00", ico: cls.ico||cls.icon||"🏋️",
-                  bk: String(s.bookings||"").split(",").map(function(x){return x.trim();}).filter(Boolean),
-                  wl: String(s.waitlist||"").split(",").map(function(x){return x.trim();}).filter(Boolean),
-                  att: {}
+                  bk: _bk, wl: _wl, att: {}
                 };
               });
               if (Object.keys(_sessionMap).length > 0) {
