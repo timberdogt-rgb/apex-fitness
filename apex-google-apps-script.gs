@@ -1630,59 +1630,7 @@ function setupTriggers() {
   try { SpreadsheetApp.getUi().alert("✅ ตั้ง Triggers สำเร็จ!"); } catch(e) {}
 }
 
-// ════════════════════════════════════════════════════════
-// 📅 [v4.4] RESCHEDULE SESSION
-// POST { action:"rescheduleSession", sessionId, newDate, staffId }
-// ════════════════════════════════════════════════════════
-function handleRescheduleSession(d) {
-  if (!d.sessionId || !d.newDate) return { ok: false, error: "missing sessionId or newDate" };
-
-  var found = findSessionRow(d.sessionId);
-  if (!found) return { ok: false, error: "ไม่พบ session: " + d.sessionId };
-
-  var classId  = found.data[1];
-  var oldDate  = found.data[2];
-  var bookings = parseList(found.data[3]);
-
-  // ตรวจว่า newDate ไม่ซ้ำกับ session ที่มีอยู่แล้ว
-  var existingNew = findSessionRow(classId + "_" + d.newDate);
-  if (existingNew) return { ok: false, error: "มี session " + classId + " วันที่ " + d.newDate + " อยู่แล้ว" };
-
-  // อัปเดต Sessions sheet
-  var sh = getSheet(SHEETS.SESSIONS);
-  var newSessionId = classId + "_" + d.newDate;
-  sh.getRange(found.row, 1).setValue(newSessionId);
-  sh.getRange(found.row, 3).setValue(d.newDate);
-
-  // อัปเดต Bookings sheet — เปลี่ยน sessionId ในแถวที่ตรงกัน
-  var bsh = getSheet(SHEETS.BOOKINGS);
-  var bdata = bsh.getDataRange().getValues();
-  var bHeaders = bdata[0]; // ["id","sessionId","memberId","type","createdAt"]
-  var sesCol = bHeaders.indexOf("sessionId");
-  for (var i = 1; i < bdata.length; i++) {
-    if (String(bdata[i][sesCol]) === String(d.sessionId)) {
-      bsh.getRange(i + 1, sesCol + 1).setValue(newSessionId);
-    }
-  }
-
-  // แจ้งเตือนสมาชิกที่จองไว้
-  var cls = readSheet(SHEETS.CLASSES).filter(function(c){ return c.id === classId; })[0];
-  var className = cls ? cls.name : classId;
-  var allMembers = readSheet(SHEETS.MEMBERS);
-  var memberMap = {};
-  allMembers.forEach(function(m){ memberMap[m.id] = m; });
-
-  bookings.forEach(function(mid) {
-    var m = memberMap[mid];
-    if (!m) return;
-    var body = className + " เลื่อนจาก " + oldDate + " เป็น " + d.newDate + "\nรายการจองของคุณยังคงอยู่ครบ!";
-    notify(mid, "reschedule", "📅 คลาสถูกเลื่อนวัน", body);
-    if (m.lineUserId) pushLineMessage(m.lineUserId, "📅 Apex Fitness\n" + body);
-  });
-
-  Logger.log("[Reschedule] " + d.sessionId + " -> " + newSessionId + " notified:" + bookings.length);
-  return { ok: true, oldDate: oldDate, newDate: d.newDate, newSessionId: newSessionId, notified: bookings.length };
-}
+// [REMOVED: duplicate handleRescheduleSession — see improved version above at ~line 707]
 
 // ════════════════════════════════════════════════════════
 // ⏰ [v4.4] PRE-CLASS REMINDER
@@ -1714,39 +1662,4 @@ function sendPreClassReminders() {
     if (classHour !== targetHour) return;
 
     var bookings = parseList(found.data[3]);
-    bookings.forEach(function(mid) {
-      var m = memberMap[mid];
-      if (!m) return;
-      var body = "คลาส " + cls.name + " เริ่มใน " + hours + " ชั่วโมง (" + cls.time + ")\nอย่าลืมมาออกกำลังกายนะ!";
-      notify(mid, "reminder", "⏰ แจ้งเตือนก่อนคลาส", body);
-      if (m.lineUserId) pushLineMessage(m.lineUserId, "⏰ Apex Fitness\n" + body);
-    });
-    Logger.log("[Reminder] " + sid + " -> notified " + bookings.length + " members");
-  });
-}
-
-function handleSetupReminderTrigger(d) {
-  var hours = parseInt(d.hoursBefore || "2", 10);
-  if (isNaN(hours) || hours < 1 || hours > 24) return { ok: false, error: "hoursBefore ต้องอยู่ระหว่าง 1-24" };
-
-  // บันทึก setting
-  var ssh = getSheet(SHEETS.SETTINGS);
-  var sdata = ssh.getDataRange().getValues();
-  var found = false;
-  for (var i = 1; i < sdata.length; i++) {
-    if (sdata[i][0] === "reminderHoursBefore") {
-      ssh.getRange(i + 1, 2).setValue(String(hours));
-      found = true; break;
-    }
-  }
-  if (!found) ssh.appendRow(["reminderHoursBefore", String(hours)]);
-
-  // ลบ reminder trigger เก่า แล้วสร้างใหม่
-  ScriptApp.getProjectTriggers().forEach(function(t) {
-    if (t.getHandlerFunction() === "sendPreClassReminders") ScriptApp.deleteTrigger(t);
-  });
-  ScriptApp.newTrigger("sendPreClassReminders").timeBased().everyHours(1).create();
-
-  Logger.log("[ReminderTrigger] set hoursBefore=" + hours);
-  return { ok: true, hoursBefore: hours };
-}
+    bookings.forEach(function(mi
