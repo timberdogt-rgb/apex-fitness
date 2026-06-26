@@ -948,12 +948,12 @@ const DEFAULT_SETTINGS = {
   reminderHoursBefore: 2,  // Batch 3C: hours before class to send LINE reminder
 };
 const DEFAULT_ETIQUETTE_RULES = [
-  { id:"e1", thai:"อย่าเสียงดัง / คุยโทรศัพท์ระหว่างคลาส", eng:"No loud talking / phone calls during class" },
-  { id:"e2", thai:"วางอุปกรณ์คืนที่เดิมหลังใช้งาน", eng:"Return equipment after use" },
-  { id:"e3", thai:"มาตรงเวลา ไม่เข้าสาย", eng:"Be on time, no late entry" },
-  { id:"e4", thai:"ไม่ใช้โทรศัพท์ระหว่างคลาส", eng:"No phone use / social media during class" },
-  { id:"e5", thai:"แต่งกายเหมาะสม สะอาดเป็นระเบียบ", eng:"Wear appropriate, clean attire" },
-  { id:"e6", thai:"เคารพเพื่อนสมาชิกและครูผู้สอน", eng:"Respect fellow members and instructors" },
+  { id:"e1", title:"📵 ระหว่างคลาส", thai:"อย่าเสียงดัง / คุยโทรศัพท์ระหว่างคลาส", eng:"No loud talking / phone calls during class" },
+  { id:"e2", title:"🏋️ อุปกรณ์", thai:"วางอุปกรณ์คืนที่เดิมหลังใช้งาน", eng:"Return equipment after use" },
+  { id:"e3", title:"⏰ ตรงเวลา", thai:"มาตรงเวลา ไม่เข้าสาย", eng:"Be on time, no late entry" },
+  { id:"e4", title:"📱 โทรศัพท์", thai:"ไม่ใช้โทรศัพท์ระหว่างคลาส", eng:"No phone use / social media during class" },
+  { id:"e5", title:"👕 การแต่งกาย", thai:"แต่งกายเหมาะสม สะอาดเป็นระเบียบ", eng:"Wear appropriate, clean attire" },
+  { id:"e6", title:"🤝 ความเคารพ", thai:"เคารพเพื่อนสมาชิกและครูผู้สอน", eng:"Respect fellow members and instructors" },
 ];
 const buildSessions = (classes) => {
   const map = {};
@@ -1516,8 +1516,8 @@ function ProfileView({ member, sessions, settings, onUploadPhoto, onToggleWlOptI
   /* wlOptIn toggle */
   onToggleWlOptIn && React.createElement("div", { style: { background: C.surf, border: `1px solid ${C.border}`, borderRadius: 12, padding: "12px 16px", marginBottom: 14, display: "flex", justifyContent: "space-between", alignItems: "center" } },
     React.createElement("div", null,
-      React.createElement("div", { style: { fontWeight: 700, fontSize: 13, color: C.text } }, "🔔 รับสำรองนาทีสุดท้าย"),
-      React.createElement("div", { style: { color: C.muted, fontSize: 11 } }, "เข้าคิวได้แม้ใกล้เวลาคลาส")
+      React.createElement("div", { style: { fontWeight: 700, fontSize: 13, color: C.text } }, "🔔 รับที่ว่างนาทีสุดท้าย"),
+      React.createElement("div", { style: { color: C.muted, fontSize: 11, lineHeight: 1.5 } }, "เมื่อมีคนยกเลิกก่อนคลาส ระบบจะเพิ่มคุณเข้าคลาสอัตโนมัติทันที")
     ),
     React.createElement("div", {
       onClick: () => onToggleWlOptIn(!member.wlOptIn),
@@ -1532,7 +1532,7 @@ function ProfileView({ member, sessions, settings, onUploadPhoto, onToggleWlOptI
       }})
     )
   ),
-  /* @__PURE__ */ React.createElement("div", { style: { background: C.surf, borderRadius: 16, border: `1px solid ${C.border}`, padding: 18 } }, /* @__PURE__ */ React.createElement("div", { style: { color: C.muted, fontSize: 11, fontWeight: 700, letterSpacing: 2, marginBottom: 14 } }, "\u0E01\u0E0E\u0E23\u0E30\u0E1A\u0E1A\u0E08\u0E2D\u0E07"), [["\u{1F6AB}", "1 \u0E04\u0E19 1 \u0E2A\u0E34\u0E17\u0E18\u0E34\u0E4C\u0E15\u0E48\u0E2D\u0E04\u0E25\u0E32\u0E2A \u2014 \u0E08\u0E2D\u0E07\u0E41\u0E17\u0E19\u0E01\u0E31\u0E19\u0E44\u0E21\u0E48\u0E44\u0E14\u0E49"], ["\u{1FA91}", "\u0E04\u0E25\u0E32\u0E2A\u0E40\u0E15\u0E47\u0E21 \u2192 \u0E08\u0E2D\u0E07\u0E17\u0E35\u0E48\u0E19\u0E31\u0E48\u0E07\u0E2A\u0E33\u0E23\u0E2D\u0E07 8\u201310 \u0E17\u0E35\u0E48"], ["\u{1F389}", "\u0E21\u0E35\u0E17\u0E35\u0E48\u0E27\u0E48\u0E32\u0E07\u0E08\u0E32\u0E01\u0E2A\u0E33\u0E23\u0E2D\u0E07 \u2192 \u0E23\u0E30\u0E1A\u0E1A\u0E41\u0E08\u0E49\u0E07\u0E40\u0E15\u0E37\u0E2D\u0E19\u0E2D\u0E31\u0E15\u0E42\u0E19\u0E21\u0E31\u0E15\u0E34"], ["\u274C", `\u0E44\u0E21\u0E48\u0E40\u0E0A\u0E47\u0E04\u0E2D\u0E34\u0E19 ${settings.noShowLimit} \u0E04\u0E23\u0E31\u0E49\u0E07 \u2192 \u0E23\u0E30\u0E07\u0E31\u0E1A ${settings.suspensionDays} \u0E27\u0E31\u0E19`], ["\u23F0", `\u0E40\u0E0A\u0E47\u0E04\u0E2D\u0E34\u0E19\u0E01\u0E48\u0E2D\u0E19 ${settings.checkinBeforeMin} \u0E19\u0E32\u0E17\u0E35 \u0E2A\u0E32\u0E22\u0E44\u0E21\u0E48\u0E40\u0E01\u0E34\u0E19 ${settings.checkinAfterMin} \u0E19\u0E32\u0E17\u0E35`]].map(([ic, tx]) => /* @__PURE__ */ React.createElement("div", { key: tx, style: { display: "flex", gap: 10, marginBottom: 11, alignItems: "flex-start" } }, /* @__PURE__ */ React.createElement("span", { style: { fontSize: 16, flexShrink: 0 } }, ic), /* @__PURE__ */ React.createElement("span", { style: { color: C.muted, fontSize: 13, lineHeight: 1.6 } }, tx)))));
+  /* @__PURE__ */ React.createElement("div", { style: { background: C.surf, borderRadius: 16, border: `1px solid ${C.border}`, padding: 18 } }, /* @__PURE__ */ React.createElement("div", { style: { color: C.muted, fontSize: 11, fontWeight: 700, letterSpacing: 2, marginBottom: 14 } }, "\u0E01\u0E0E\u0E23\u0E30\u0E1A\u0E1A\u0E08\u0E2D\u0E07"), settings.bookingRules ? /* @__PURE__ */ React.createElement("div", { style: { fontSize: 12, color: C.text, whiteSpace: "pre-wrap", lineHeight: 1.7, marginBottom: 12, paddingBottom: 12, borderBottom: `1px solid ${C.border}` } }, settings.bookingRules) : null, [["\u{1F6AB}", "1 \u0E04\u0E19 1 \u0E2A\u0E34\u0E17\u0E18\u0E34\u0E4C\u0E15\u0E48\u0E2D\u0E04\u0E25\u0E32\u0E2A \u2014 \u0E08\u0E2D\u0E07\u0E41\u0E17\u0E19\u0E01\u0E31\u0E19\u0E44\u0E21\u0E48\u0E44\u0E14\u0E49"], ["\u{1FA91}", "\u0E04\u0E25\u0E32\u0E2A\u0E40\u0E15\u0E47\u0E21 \u2192 \u0E08\u0E2D\u0E07\u0E17\u0E35\u0E48\u0E19\u0E31\u0E48\u0E07\u0E2A\u0E33\u0E23\u0E2D\u0E07 8\u201310 \u0E17\u0E35\u0E48"], ["\u{1F389}", "\u0E21\u0E35\u0E17\u0E35\u0E48\u0E27\u0E48\u0E32\u0E07\u0E08\u0E32\u0E01\u0E2A\u0E33\u0E23\u0E2D\u0E07 \u2192 \u0E23\u0E30\u0E1A\u0E1A\u0E41\u0E08\u0E49\u0E07\u0E40\u0E15\u0E37\u0E2D\u0E19\u0E2D\u0E31\u0E15\u0E42\u0E19\u0E21\u0E31\u0E15\u0E34"], ["\u274C", `\u0E44\u0E21\u0E48\u0E40\u0E0A\u0E47\u0E04\u0E2D\u0E34\u0E19 ${settings.noShowLimit} \u0E04\u0E23\u0E31\u0E49\u0E07 \u2192 \u0E23\u0E30\u0E07\u0E31\u0E1A ${settings.suspensionDays} \u0E27\u0E31\u0E19`], ["\u23F0", `\u0E40\u0E0A\u0E47\u0E04\u0E2D\u0E34\u0E19\u0E01\u0E48\u0E2D\u0E19 ${settings.checkinBeforeMin} \u0E19\u0E32\u0E17\u0E35 \u0E2A\u0E32\u0E22\u0E44\u0E21\u0E48\u0E40\u0E01\u0E34\u0E19 ${settings.checkinAfterMin} \u0E19\u0E32\u0E17\u0E35`]].map(([ic, tx]) => /* @__PURE__ */ React.createElement("div", { key: tx, style: { display: "flex", gap: 10, marginBottom: 11, alignItems: "flex-start" } }, /* @__PURE__ */ React.createElement("span", { style: { fontSize: 16, flexShrink: 0 } }, ic), /* @__PURE__ */ React.createElement("span", { style: { color: C.muted, fontSize: 13, lineHeight: 1.6 } }, tx)))));
 }
 const BarChartSimple = ({ data, colorA = "#F97316", colorB = "#F59E0B" }) => {
   const maxV = Math.max(...data.map((d) => (d["\u0E08\u0E2D\u0E07"] || 0) + (d["\u0E2A\u0E33\u0E23\u0E2D\u0E07"] || 0)), 1);
@@ -2289,6 +2289,7 @@ function FeedbackView({ member, feedback, onSubmit, showToast, etiquetteRules })
         (etiquetteRules || DEFAULT_ETIQUETTE_RULES).map(function(rule, idx, arr) {
           return React.createElement("div", { key: rule.id || idx, style: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 0", borderBottom: idx < arr.length - 1 ? `1px solid ${C.border}` : "none" } },
             React.createElement("div", { style: { flex: 1, fontSize: 13, color: C.text } },
+              rule.title ? React.createElement("div", { style: { fontSize: 11, color: C.orange, fontWeight: 700, marginBottom: 2 } }, rule.title) : null,
               "\u2022 " + rule.thai,
               rule.eng ? React.createElement("div", { style: { fontSize: 11, color: C.muted, marginTop: 2 } }, rule.eng) : null
             ),
@@ -2554,6 +2555,7 @@ function AdminSettings({ settings, onSave, members, onUnlockDevice, showToast, o
     etqRules.map((rule, idx) =>
       etqEditIdx === idx
         ? React.createElement("div", { key: rule.id + "_edit", style: { background: C.bg, borderRadius: 10, padding: 12, marginBottom: 8 } },
+            React.createElement("input", { value: rule.title || "", placeholder: "\u0E2B\u0E31\u0E27\u0E02\u0E49\u0E2D (\u0E40\u0E0A\u0E48\u0E19 \uD83D\uDCF5 \u0E42\u0E17\u0E23\u0E28\u0E31\u0E1E\u0E17\u0E4C)", onChange: e => setEtqRules(prev => prev.map((r,i) => i===idx ? Object.assign({},r,{title:e.target.value}) : r)), style: { width: "100%", padding: "8px 10px", background: C.surf, border: `1px solid ${C.border}`, borderRadius: 8, color: C.orange, fontSize: 12, fontWeight: 700, boxSizing: "border-box", outline: "none", fontFamily: FONT, marginBottom: 6 } }),
             React.createElement("input", { value: rule.thai, placeholder: "\u0E02\u0E49\u0E2D\u0E04\u0E27\u0E32\u0E21\u0E20\u0E32\u0E29\u0E32\u0E44\u0E17\u0E22", onChange: e => setEtqRules(prev => prev.map((r,i) => i===idx ? Object.assign({},r,{thai:e.target.value}) : r)), style: { width: "100%", padding: "8px 10px", background: C.surf, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, fontSize: 13, boxSizing: "border-box", outline: "none", fontFamily: FONT, marginBottom: 6 } }),
             React.createElement("input", { value: rule.eng, placeholder: "English subtitle (optional)", onChange: e => setEtqRules(prev => prev.map((r,i) => i===idx ? Object.assign({},r,{eng:e.target.value}) : r)), style: { width: "100%", padding: "8px 10px", background: C.surf, border: `1px solid ${C.border}`, borderRadius: 8, color: C.muted, fontSize: 12, boxSizing: "border-box", outline: "none", fontFamily: FONT, marginBottom: 8 } }),
             React.createElement("div", { style: { display: "flex", gap: 8 } },
@@ -2563,6 +2565,7 @@ function AdminSettings({ settings, onSave, members, onUnlockDevice, showToast, o
           )
         : React.createElement("div", { key: rule.id + "_view", style: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "9px 0", borderBottom: `1px solid ${C.border}` } },
             React.createElement("div", { style: { flex: 1, fontSize: 13, color: C.text } },
+              rule.title ? React.createElement("div", { style: { fontSize: 11, color: C.orange, fontWeight: 700, marginBottom: 2 } }, rule.title) : null,
               "\u2022 " + (rule.thai || "(\u0E22\u0E31\u0E07\u0E44\u0E21\u0E48\u0E21\u0E35\u0E02\u0E49\u0E2D\u0E04\u0E27\u0E32\u0E21)"),
               rule.eng ? React.createElement("div", { style: { fontSize: 11, color: C.muted, marginTop: 1 } }, rule.eng) : null
             ),
@@ -3049,17 +3052,36 @@ function App() {
         setMembers((pm) => {
           const nm = pm.map((m) => {
             if (m.id !== mid) return m;
-            const n = (m.noShowCount || 0) + 1;
-            if (n >= settings.noShowLimit && !m.suspended) {
-              showToast(`\u{1F6AB} ${m.name} \u0E16\u0E39\u0E01\u0E23\u0E30\u0E07\u0E31\u0E1A ${settings.suspensionDays} \u0E27\u0E31\u0E19`, "warn");
-              pushNotif(mid, "suspended", "\u{1F6AB} \u0E1A\u0E31\u0E0D\u0E0A\u0E35\u0E16\u0E39\u0E01\u0E23\u0E30\u0E07\u0E31\u0E1A", `\u0E04\u0E38\u0E13 no-show \u0E04\u0E23\u0E1A ${settings.noShowLimit} \u0E04\u0E23\u0E31\u0E49\u0E07 \u0E23\u0E30\u0E1A\u0E1A\u0E23\u0E30\u0E07\u0E31\u0E1A\u0E01\u0E32\u0E23\u0E08\u0E2D\u0E07 ${settings.suspensionDays} \u0E27\u0E31\u0E19`);
-              return __spreadProps(__spreadValues({}, m), { noShowCount: n, suspended: true, suspendedUntil: fmt(shift(TODAY, settings.suspensionDays)) });
+            const today = fmt(TODAY);
+            const rawN = (m.noShowCount || 0) + 1;
+            let windowStart = m.noShowWindowStart || today;
+            let level = m.penaltyLevel || 0;
+            // Check if 90-day window has expired \u2192 reset
+            const daysSince = Math.floor((new Date(today) - new Date(windowStart)) / 86400000);
+            let n = rawN, effectiveWindowStart = windowStart, effectiveLevel = level;
+            if (isNaN(daysSince) || daysSince > 90) {
+              n = 1; effectiveWindowStart = today; effectiveLevel = 0;
             }
+            const inWindow30 = Math.floor((new Date(today) - new Date(effectiveWindowStart)) / 86400000) <= 30;
+            // L2: already L1, another no-show within 90-day window
+            if (effectiveLevel >= 1 && !m.suspended) {
+              showToast(`\u{1F6AB} ${m.name} \u0E23\u0E30\u0E07\u0E31\u0E1A L2 (14 \u0E27\u0E31\u0E19)`, "warn");
+              pushNotif(mid, "suspended", "\u{1F6AB} \u0E23\u0E30\u0E07\u0E31\u0E1A L2", "No-show \u0E0B\u0E49\u0E33\u0E43\u0E19  90 \u0E27\u0E31\u0E19 \u0E23\u0E30\u0E07\u0E31\u0E1A 14 \u0E27\u0E31\u0E19");
+              return __spreadProps(__spreadValues({}, m), { noShowCount: n, penaltyLevel: 2, suspended: true, suspendedUntil: fmt(shift(TODAY, 14)), noShowWindowStart: effectiveWindowStart });
+            }
+            // L1: 3+ no-shows within 30 days
+            if (n >= 3 && inWindow30 && effectiveLevel === 0 && !m.suspended) {
+              showToast(`\u{1F6AB} ${m.name} \u0E23\u0E30\u0E07\u0E31\u0E1A L1 (7 \u0E27\u0E31\u0E19)`, "warn");
+              pushNotif(mid, "suspended", "\u{1F6AB} \u0E23\u0E30\u0E07\u0E31\u0E1A L1", "No-show 3 \u0E04\u0E23\u0E31\u0E49\u0E07\u0E43\u0E19 30 \u0E27\u0E31\u0E19 \u0E23\u0E30\u0E07\u0E31\u0E1A 7 \u0E27\u0E31\u0E19");
+              return __spreadProps(__spreadValues({}, m), { noShowCount: n, penaltyLevel: 1, suspended: true, suspendedUntil: fmt(shift(TODAY, 7)), noShowWindowStart: effectiveWindowStart });
+            }
+            // Count only
             if (!m.suspended) {
-              showToast(`\u26A0\uFE0F ${m.name} no-show \u0E04\u0E23\u0E31\u0E49\u0E07\u0E17\u0E35\u0E48 ${n}`, "warn");
-              pushNotif(mid, "info", "\u26A0\uFE0F \u0E1A\u0E31\u0E19\u0E17\u0E36\u0E01 No-show", `\u0E04\u0E38\u0E13\u0E44\u0E21\u0E48\u0E44\u0E14\u0E49\u0E40\u0E0A\u0E47\u0E04\u0E2D\u0E34\u0E19 (\u0E04\u0E23\u0E31\u0E49\u0E07\u0E17\u0E35\u0E48 ${n}/${settings.noShowLimit})`);
+              const rem = effectiveLevel === 0 ? Math.max(0, 3 - n) : 0;
+              showToast(`\u26A0\uFE0F ${m.name} no-show \u0E04\u0E23\u0E31\u0E49\u0E07\u0E17\u0E35\u0E48 ${n}` + (rem > 0 ? ` (\u0E2D\u0E35\u0E01 ${rem} \u0E04\u0E23\u0E31\u0E49\u0E07\u0E16\u0E39\u0E01\u0E23\u0E30\u0E07\u0E31\u0E1A)` : ""), "warn");
+              pushNotif(mid, "info", "\u26A0\uFE0F \u0E1A\u0E31\u0E19\u0E17\u0E36\u0E01 No-show", `No-show \u0E04\u0E23\u0E31\u0E49\u0E07\u0E17\u0E35\u0E48 ${n}`);
             }
-            return __spreadProps(__spreadValues({}, m), { noShowCount: n });
+            return __spreadProps(__spreadValues({}, m), { noShowCount: n, noShowWindowStart: effectiveWindowStart, penaltyLevel: effectiveLevel });
           });
           save("apex_members", nm);
           return nm;
