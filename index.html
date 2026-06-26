@@ -3016,10 +3016,12 @@ function App() {
   const toggleWlOptIn = useCallback(async (val) => {
     const mid = auth && auth.mid;
     if (!mid) return;
-    const res = await postAction("toggleWlOptIn", { memberId: mid, value: val });
+    const res = await postAction("toggleWlOptIn", { memberId: mid, value: val }).catch(e => ({ ok: false, error: e.message }));
     if (res && res.ok) {
       setMembers(prev => prev.map(m => m.id === mid ? { ...m, wlOptIn: res.wlOptIn } : m));
-      showToast(res.wlOptIn ? "✅ เปิดรับสำรองช่วงนาทีสุดท้ายแล้ว" : "ปิดการรับสำรองนาทีสุดท้าย", "ok");
+      showToast(res.wlOptIn ? "✅ เปิดรับที่ว่างนาทีสุดท้ายแล้ว" : "🔕 ปิดรับที่ว่างนาทีสุดท้ายแล้ว", "ok");
+    } else {
+      showToast("❌ " + ((res && res.error) || "ไม่สามารถบันทึกได้ กรุณาลองใหม่"), "err");
     }
   }, [auth, postAction, showToast]);
 
