@@ -2761,6 +2761,8 @@ function App() {
                 if (!cls) return;
                 var col = cls.col || cls.color || "#F97316";
                 var _bk = String(s.bookings||"").split(",").map(function(x){return x.trim();}).filter(Boolean);
+                // Fix concatenated phone IDs from Google Sheets number-formatting bug (e.g. "815319110858634000" = two 9-digit IDs merged)
+                var _bkFixed=[]; _bk.forEach(function(mid){if(/^\d{15,}$/.test(mid)){var h=Math.floor(mid.length/2);_bkFixed.push(mid.slice(0,h));_bkFixed.push(mid.slice(h));}else{_bkFixed.push(mid);}}); _bk=_bkFixed;
                 var _wl = String(s.waitlist||"").split(",").map(function(x){return x.trim();}).filter(Boolean);
                 var _t  = s.timeOverride || cls.t || cls.time;
                 // Dedup: prefer rescheduled row (has timeOverride), then row with more bookings
@@ -3365,6 +3367,8 @@ function App() {
             _d.sessions.forEach(function(s) {
               var cls = _pClsMap[String(s.classId||"")]; if (!cls) return;
               var _bk = String(s.bookings||"").split(",").map(function(x){return x.trim();}).filter(Boolean);
+              // Fix concatenated phone IDs from Google Sheets number-formatting bug
+              var _bkFixed=[]; _bk.forEach(function(mid){if(/^\d{15,}$/.test(mid)){var h=Math.floor(mid.length/2);_bkFixed.push(mid.slice(0,h));_bkFixed.push(mid.slice(h));}else{_bkFixed.push(mid);}}); _bk=_bkFixed;
               var _wl = String(s.waitlist||"").split(",").filter(Boolean).map(function(x){return x.trim();});
               var _t = s.timeOverride || cls.t;
               // Dedup: prefer rescheduled row (has timeOverride)
