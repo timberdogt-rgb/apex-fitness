@@ -1667,12 +1667,28 @@ function sendPreClassReminders() {
 
   classes.forEach(function(cls) {
     var sid = cls.id + "_" + targetDate;
+    var clsHour = parseInt((cls.time || cls.t || "00:00").split(":")[0], 10);
+    if (clsHour !== targetHour) return;
     var found = findSessionRow(sid);
     if (!found) return;
+    var bk = parseList(found.data[3]);
+    bk.forEach(function(mid) {
+      var member = memberMap[mid];
+      if (!member || !member.lineUserId) return;
+      var msg = "🔔 แจ้งเตือนคลาส: " + cls.name + "\n📅 วันที่: " + targetDate + "\n⏰ เวลา: " + (cls.time || cls.t) + " น.\nโปรดมาตรงเวลา 💪";
+      try { sendLineMessage(member.lineUserId, msg); } catch(e) {}
+    });
+  });
+}
 
-    // ตรวจเวลาคลาส ตรงกับ targetHour ไหม
-    var classHour = parseInt(String(cls.time).split(":")[0], 10);
-    if (classHour !== targetHour) return;
-
-    var bookings = parseList(found.data[3]);
-    bookings.forEach(function(mi
+function handleSetupReminderTrigger(d) {
+  var hours = parseInt(d.hoursBefore || "2", 10);
+  if (isNaN(hours) || hours < 1) hours = 2;
+  ScriptApp.getProjectTriggers().filter(function(t){ return t.getHandlerFunction() === "sendPreClassReminders"; })
+    .forEach(function(t){ ScriptApp.deleteTrigger(t); });
+  ScriptApp.newTrigger("sendPreClassReminders").timeBased().everyHours(1).create();
+  var settings = readSettingsObj();
+  settings.reminderHoursBefore = String(hours);
+  saveSettingsObj(settings);
+  return { ok: true, hoursBefore: hours };
+}
