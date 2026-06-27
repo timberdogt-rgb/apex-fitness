@@ -969,7 +969,7 @@ function handleJoinWaitlist_v1(d) {
     return { ok:true, position: wl.length };
   });
 }
-function handleCancel_v1(d) {
+function handleCancel(d) {
   return withLock(function() {
     var found = findSessionRow(d.sessionId); if (!found) return { ok:false, error:"ไม่พบคลาส" };
     var cls = readSheet(SHEETS.CLASSES).filter(function(c){ return c.id === found.data[1]; })[0];
@@ -991,6 +991,8 @@ function handleCancel_v1(d) {
     var sh = getSheet(SHEETS.SESSIONS);
     setTextValue(sh, found.row, 4, bk.join(","));
     setTextValue(sh, found.row, 5, wl.join(","));
+    // Remove from Bookings sheet so cross-reference stays accurate
+    deleteBookingRow(d.sessionId, d.memberId);
 
     if (isLateCancel) {
       upsertAttendance(d.sessionId, d.memberId, "noshow");
@@ -999,6 +1001,17 @@ function handleCancel_v1(d) {
     }
     return { ok:true, promoted:promoted, lateCancel:false };
   });
+}
+function deleteBookingRow(sessionId, memberId) {
+  var sh = getSheet(SHEETS.BOOKINGS);
+  if (!sh) return;
+  var data = sh.getDataRange().getValues();
+  for (var i = data.length - 1; i >= 1; i--) {
+    if (String(data[i][1]) === String(sessionId) && String(data[i][2]) === String(memberId)) {
+      sh.deleteRow(i + 1);
+      return;
+    }
+  }
 }
 function handleCancelWaitlist(d) {
   return withLock(function() {
