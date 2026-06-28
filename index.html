@@ -2764,7 +2764,7 @@ function App() {
         let _sheetsMembers = null, _sheetsClasses = null, _sheetsSettings = null, _sheetsSessions = null, _sheetsGuestBookings = null, _sheetsFeedback = null;
         if (APPS_SCRIPT_URL) {
           try {
-            const _sr = await fetch(APPS_SCRIPT_URL + "?action=getAll", {signal: AbortSignal.timeout(12000)});
+            const _sr = await fetch(APPS_SCRIPT_URL + "?action=getAll", {signal: AbortSignal.timeout(30000)});
             const _sd = await _sr.json();
             if (_sd && _sd.members && _sd.members.length > 0) {
               // Normalize member fields เป็น string เพื่อป้องกัน .includes() error
@@ -3379,7 +3379,7 @@ function App() {
     const _poll = async () => {
       if (_sd) _sd.style.display = "flex";
       try {
-        const _r = await fetch(APPS_SCRIPT_URL + "?action=getAll", { signal: AbortSignal.timeout(15000) });
+        const _r = await fetch(APPS_SCRIPT_URL + "?action=getAll", { signal: AbortSignal.timeout(30000) });
         const _d = await _r.json();
         if (_d) {
           if (_d.members && _d.members.length > 0) {
