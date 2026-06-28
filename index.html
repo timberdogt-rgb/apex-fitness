@@ -653,6 +653,19 @@ body.apex-light {
   </script>
   <script>
     const { useState, useEffect, useMemo, useCallback, useRef } = React;
+    // ฟังก์ชันพิเศษสำหรับเยียวยาและหลอมรวมเศษรหัสสมาชิกที่ถูก Google Sheets แปลงเป็นฟอร์แมตตัวเลขคอมมา
+    const parseIdList = (str) => {
+      if (!str) return [];
+      var parts = String(str).split(",").map(function(x){ return x.trim(); }).filter(Boolean);
+      if (parts.length > 2 && parts.every(function(p){ return /^\d+$/.test(p); }) && parts.slice(1).every(function(p){ return p.length === 3; })) {
+        var glued = parts.join("");
+        var chunks = [];
+        if (glued.length >= 9) chunks.push(glued.slice(0, 9));
+        if (glued.length >= 18) chunks.push(glued.slice(9, 18));
+        return chunks;
+      }
+      return parts;
+    };
     // ── APEX FITNESS APP v10 ─────────────────────────────
 var __defProp = Object.defineProperty;
 var __defProps = Object.defineProperties;
