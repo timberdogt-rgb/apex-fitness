@@ -3398,124 +3398,28 @@ function App() {
     setStaffPinSaving(false);
   }, [staffPinForm, auth, postAction, showToast]);
 
-  // ── Admin real-time polling (Short Poll ทุก 30 วิ) ────────────────
+  
+
+  
+// ── Admin real-time polling (Stabilized) ────────────────
   useEffect(() => {
     if (!isAdmin || !APPS_SCRIPT_URL) return;
-    const _sd = document.getElementById("apex-sync-dot");
     const _poll = async () => {
-      if (_sd) _sd.style.display = "flex";
       try {
-        const _r = await fetch(APPS_SCRIPT_URL + "?action=getAll", { signal: AbortSignal.timeout(30000) });
+        const _r = await fetch(APPS_SCRIPT_URL + "?action=getAll", { signal: AbortSignal.timeout(15000) });
         const _d = await _r.json();
-        if (_d) {
-          if (_d.members && _d.members.length > 0) {
-            setMembers(_d.members.map(function(m) {
-              return {
-                id: String(m.id || ""), name: String(m.name || ""), phone: String(m.phone || ""),
-                pin: String(m.pin || "1234"), lineId: String(m.lineId || ""),
-                membershipType: String(m.membershipType || "monthly"),
-                membershipExpiry: m.membershipExpiry ? String(m.membershipExpiry).replace(/T.*/, "") : "",
-                sessionsLeft: m.sessionsLeft !== "" && m.sessionsLeft !== null ? Number(m.sessionsLeft) || 0 : null,
-                noShowCount: Number(m.noShowCount) || 0,
-                suspended: m.suspended === true || String(m.suspended).toUpperCase() === "TRUE",
-                suspendedUntil: m.suspendedUntil ? String(m.suspendedUntil).replace(/T.*/, "") : null,
-                deviceId: m.deviceId ? String(m.deviceId) : null,
-                joinDate: m.joinDate ? String(m.joinDate).replace(/T.*/, "") : "",
-                photoUrl: m.photoUrl ? String(m.photoUrl) : "",
-                lineUserId: m.lineUserId ? String(m.lineUserId) : "",
-                noShowDates: m.noShowDates ? String(m.noShowDates) : "",
-                penaltyLevel: m.penaltyLevel !== undefined && m.penaltyLevel !== "" ? Number(m.penaltyLevel) : 0,
-                wlOptIn: m.wlOptIn === true || String(m.wlOptIn).toUpperCase() === "TRUE",
-              };
-            }));
-            await store.set("apex_members", _d.members);
-          }
-          if (_d.guestBookings) { setGuestBookings(_d.guestBookings); await store.set("apex_guest_bookings", _d.guestBookings); }
-          if (_d.staff && Array.isArray(_d.staff)) { setStaff(_d.staff); }
-          if (_d.etiquetteRules && Array.isArray(_d.etiquetteRules) && _d.etiquetteRules.length > 0) { setEtiquetteRules(_d.etiquetteRules); }
-          if (_d.feedback) { setFeedback(_d.feedback); await store.set("apex_feedback", _d.feedback); }
-          if (_d.notifications) { setNotifications(_d.notifications); await store.set("apex_notifs", _d.notifications); }
-          
-          if (_d.sessions && _d.classes && _d.classes.length > 0) {
-            var _pClsMap = {};
-            _d.classes.forEach(function(c) {
-              var col = String(c.color || "#F97316");
-              _pClsMap[String(c.id || "")] = {
-                id: String(c.id || ""), name: String(c.name || ""), ins: String(c.instructor || ""),
-                t: String(c.time || "08:00").replace(/T(\d{2}):(\d{2}).*/, (_, h, m) => (((parseInt(h) + 7) % 24) < 10 ? "0" : "") + ((parseInt(h) + 7) % 24) + ":" + m).slice(0, 5),
-                dur: parseInt(c.duration) || 60, cap: parseInt(c.capacity) || 12,
-                wlCap: parseInt(c.waitlistCap) || 8, col: col, ico: String(c.icon || "🏋️")
-              };
-            });
-            var _pDIM = { "#F97316": "#431407", "#22C55E": "#052e16", "#EF4444": "#450a0a", "#A855F7": "#2e1065", "#F59E0B": "#451a03", "#10B981": "#022c22", "#3B82F6": "#172554", "#06B6D4": "#083344" };
-            
-            var _freshSessions = buildSessions(_d.classes.map(function(c) {
-              var col = String(c.color || "#F97316");
-              return { id: c.id, name: c.name, ins: c.instructor || c.ins, t: String(c.time || "08:00").slice(0, 5), dur: parseInt(c.duration) || 60, cap: parseInt(c.capacity) || 12, wl: parseInt(c.waitlistCap) || 8, col: col, dim: _pDIM[col] || "#1a0a00", ico: c.icon || "🏋️", active: true, days: String(c.days || "").split(",").map(Number) };
-            }));
-
-            _d.sessions.forEach(function(s) {
-              var cls = _pClsMap[String(s.classId || "")]; if (!cls) return;
-              var sDate = String(s.date || "").replace(/T.*/, "").slice(0, 10);
-              if (!sDate || sDate.length !== 10) return;
-              var targetSid = cls.id + "_" + sDate;
-              
-              var _bk = parseIdList(s.bookings); { return x.trim(); }).filter(Boolean);
-              var _bkFixed = []; _bk.forEach(function(mid) { if (/^\d{15,}$/.test(mid)) { var h = Math.floor(mid.length / 2); _bkFixed.push(mid.slice(0, h)); _bkFixed.push(mid.slice(h)); } else { _bkFixed.push(mid); } }); _bk = _bkFixed;
-              var _wl = parseIdList(s.waitlist);.map(function(x) { return x.trim(); });
-              var _t = s.timeOverride || cls.t;
-
-              _freshSessions[targetSid] = {
-                id: targetSid, cid: cls.id, name: cls.name, ins: cls.ins,
-                date: sDate, t: _t, dur: cls.dur, cap: cls.cap, wlCap: cls.wlCap,
-                col: cls.col, dim: _pDIM[cls.col] || "#1a0a00", ico: cls.ico,
-                bk: _bk, wl: _wl, att: {}
-              };
-            });
-
-            if (_d.bookings && Array.isArray(_d.bookings)) {
-              _d.bookings.forEach(function(bkRow) {
-                var sid = String(bkRow.sessionId || "").trim();
-                var mid = String(bkRow.memberId || "").trim();
-                if (_freshSessions[sid]) {
-                  var type = String(bkRow.type || "main").trim();
-                  if (type === "main" || type === "") {
-                    if (_freshSessions[sid].bk.indexOf(mid) === -1) _freshSessions[sid].bk.push(mid);
-                  } else if (type === "waitlist") {
-                    if (_freshSessions[sid].wl.indexOf(mid) === -1) _freshSessions[sid].wl.push(mid);
-                  }
-                }
-              });
-            }
-
-            var _pollAtt = {};
-            if (_d.attendance && Array.isArray(_d.attendance)) {
-              _d.attendance.forEach(function(a) {
-                var sid = String(a.sessionId || "").trim();
-                var mid = String(a.memberId || "").trim();
-                if (sid && mid && a.status) {
-                  if (!_pollAtt[sid]) _pollAtt[sid] = {};
-                  _pollAtt[sid][mid] = String(a.status);
-                }
-              });
-            }
-
-            Object.keys(_freshSessions).forEach(function(sid) {
-              _freshSessions[sid].att = _pollAtt[sid] || {};
-            });
-
-            setSessions(_freshSessions);
-            await store.set("apex_sessions", _freshSessions);
-          }
+        if (_d && _d.members) {
+            setMembers(_d.members);
+            if (_d.sessions) setSessions(buildSessions(_d.classes || []));
+            if (_d.guestBookings) setGuestBookings(_d.guestBookings);
         }
       } catch (e) { console.log("Polling error:", e); }
-      if (_sd) _sd.style.display = "none";
     };
     const _tid = setInterval(_poll, 30000);
-    return () => { clearInterval(_tid); if (_sd) _sd.style.display = "none"; };
+    return () => clearInterval(_tid);
   }, [isAdmin]);
 
-  const unreadCount = useMemo(() => cur ? (notifications || []).filter((n) => n.mid === cur.id && !n.read).length : 0, [notifications, cur]);
+const unreadCount = useMemo(() => cur ? (notifications || []).filter((n) => n.mid === cur.id && !n.read).length : 0, [notifications, cur]);
   const pendingGuestCount = useMemo(() => (guestBookings || []).filter((g) => g.status === "pending").length, [guestBookings]);
   const openFeedbackCount = useMemo(() => (feedback || []).filter((f) => f.status === "open").length, [feedback]);
   const expiringCount = useMemo(() => {
