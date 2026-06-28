@@ -3486,7 +3486,7 @@ function App() {
     };
     const _tid = setInterval(_poll, 30000);
     return () => { clearInterval(_tid); if (_sd) _sd.style.display = "none"; };
-  }, [isAdmin]
+  }, [isAdmin]);
 
   const unreadCount = useMemo(() => cur ? (notifications || []).filter((n) => n.mid === cur.id && !n.read).length : 0, [notifications, cur]);
   const pendingGuestCount = useMemo(() => (guestBookings || []).filter((g) => g.status === "pending").length, [guestBookings]);
