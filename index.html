@@ -3408,7 +3408,7 @@ function App() {
           if (_d.etiquetteRules && Array.isArray(_d.etiquetteRules) && _d.etiquetteRules.length > 0) { setEtiquetteRules(_d.etiquetteRules); }
           if (_d.feedback) { setFeedback(_d.feedback); await store.set("apex_feedback", _d.feedback); }
           if (_d.notifications) { setNotifications(_d.notifications); await store.set("apex_notifs", _d.notifications); }
-          // ── [FIX#3] Update sessions from GAS so admin sees new bookings ──────
+          
           if (_d.sessions && _d.classes && _d.classes.length > 0) {
             var _pClsMap = {};
             _d.classes.forEach(function(c) {
@@ -3417,50 +3417,50 @@ function App() {
                 id:String(c.id||""), name:String(c.name||""), ins:String(c.instructor||""),
                 t:String(c.time||"08:00").replace(/T(\d{2}):(\d{2}).*/,(_,h,m)=>(((parseInt(h)+7)%24)<10?"0":"")+((parseInt(h)+7)%24)+":"+m).slice(0,5),
                 dur:parseInt(c.duration)||60, cap:parseInt(c.capacity)||12,
-                wlCap:parseInt(c.waitlistCap)||8, col:col, ico:String(c.icon||"\u{1F3CB}\uFE0F")
+                wlCap:parseInt(c.waitlistCap)||8, col:col, ico:String(c.icon||"🏋️")
               };
             });
             var _pDIM = {"#F97316":"#431407","#22C55E":"#052e16","#EF4444":"#450a0a","#A855F7":"#2e1065","#F59E0B":"#451a03","#10B981":"#022c22","#3B82F6":"#172554","#06B6D4":"#083344"};
-            var _pollSe = {};
+            
+            var _freshSessions = buildSessions(_d.classes.map(function(c) {
+              var col = String(c.color||"#F97316");
+              return { id: c.id, name: c.name, ins: c.instructor||c.ins, t: String(c.time||"08:00").slice(0,5), dur: parseInt(c.duration)||60, cap: parseInt(c.capacity)||12, wl: parseInt(c.waitlistCap)||8, col: col, dim: _pDIM[col]||"#1a0a00", ico: c.icon||"🏋️", active: true, days: String(c.days||"").split(",").map(Number) };
+            }));
+
             _d.sessions.forEach(function(s) {
               var cls = _pClsMap[String(s.classId||"")]; if (!cls) return;
+              var sDate = String(s.date||"").replace(/T.*/,"").slice(0,10);
+              if (!sDate || sDate.length !== 10) return;
+              var targetSid = cls.id + "_" + sDate;
+              
               var _bk = String(s.bookings||"").split(",").map(function(x){return x.trim();}).filter(Boolean);
-              // Fix concatenated phone IDs from Google Sheets number-formatting bug
               var _bkFixed=[]; _bk.forEach(function(mid){if(/^\d{15,}$/.test(mid)){var h=Math.floor(mid.length/2);_bkFixed.push(mid.slice(0,h));_bkFixed.push(mid.slice(h));}else{_bkFixed.push(mid);}}); _bk=_bkFixed;
               var _wl = String(s.waitlist||"").split(",").filter(Boolean).map(function(x){return x.trim();});
               var _t = s.timeOverride || cls.t;
-              // Dedup: prefer rescheduled row (has timeOverride)
-              if (_pollSe[s.id]) {
-                if (s.timeOverride && !_pollSe[s.id]._hasTO) {
-                  _pollSe[s.id].t = _t; _pollSe[s.id]._hasTO = true;
-                  if (_bk.length > 0) { _pollSe[s.id].bk = _bk; _pollSe[s.id].wl = _wl; }
-                } else if (!s.timeOverride && !_pollSe[s.id]._hasTO && _bk.length > _pollSe[s.id].bk.length) {
-                  _pollSe[s.id].bk = _bk; _pollSe[s.id].wl = _wl;
-                }
-                return;
-              }
-              _pollSe[s.id] = {
-                id:s.id, cid:cls.id, name:cls.name, ins:cls.ins,
-                date:String(s.date||"").replace(/T.*/,"").slice(0,10), t:_t, dur:cls.dur, cap:cls.cap, wlCap:cls.wlCap,
-                col:cls.col, dim:_pDIM[cls.col]||"#1a0a00", ico:cls.ico,
-                bk:_bk, wl:_wl, att:{}, _hasTO:!!s.timeOverride
+
+              _freshSessions[targetSid] = {
+                id: targetSid, cid: cls.id, name: cls.name, ins: cls.ins,
+                date: sDate, t: _t, dur: cls.dur, cap: cls.cap, wlCap: cls.wlCap,
+                col: cls.col, dim: _pDIM[cls.col]||"#1a0a00", ico: cls.ico,
+                bk: _bk, wl: _wl, att: {}
               };
             });
-            // Cross-reference Bookings sheet for accurate bk
+
             if (_d.bookings && Array.isArray(_d.bookings)) {
               _d.bookings.forEach(function(bkRow) {
                 var sid = String(bkRow.sessionId||"").trim();
                 var mid = String(bkRow.memberId||"").trim();
-                if (!sid || !mid || !_pollSe[sid]) return;
-                var t = String(bkRow.type||"main").trim();
-                if (t === "main" || t === "") {
-                  if (_pollSe[sid].bk.indexOf(mid) === -1) _pollSe[sid].bk.push(mid);
-                } else if (t === "waitlist") {
-                  if (_pollSe[sid].wl.indexOf(mid) === -1) _pollSe[sid].wl.push(mid);
+                if (_freshSessions[sid]) {
+                  var type = String(bkRow.type||"main").trim();
+                  if (type === "main" || type === "") {
+                    if (_freshSessions[sid].bk.indexOf(mid) === -1) _freshSessions[sid].bk.push(mid);
+                  } else if (type === "waitlist") {
+                    if (_freshSessions[sid].wl.indexOf(mid) === -1) _freshSessions[sid].wl.push(mid);
+                  }
                 }
               });
             }
-            // Cross-reference Attendance sheet for accurate att
+
             var _pollAtt = {};
             if (_d.attendance && Array.isArray(_d.attendance)) {
               _d.attendance.forEach(function(a) {
@@ -3472,34 +3472,21 @@ function App() {
                 }
               });
             }
-            if (Object.keys(_pollSe).length > 0) {
-              setSessions(function(prev) {
-                var merged = Object.assign({}, prev);
-                Object.keys(_pollSe).forEach(function(sid) {
-                  merged[sid] = Object.assign({}, _pollSe[sid], { att: _pollAtt[sid] || (prev[sid]&&prev[sid].att) || {} });
-                });
-                store.set("apex_sessions", merged);
-                return merged;
-              });
-            }
+
+            Object.keys(_freshSessions).forEach(function(sid) {
+              _freshSessions[sid].att = _pollAtt[sid] || {};
+            });
+
+            setSessions(_freshSessions);
+            await store.set("apex_sessions", _freshSessions);
           }
         }
-      // ── [Phase 3] Fetch pending WL confirmations for current member ─────
-        try {
-          if (APPS_SCRIPT_URL && auth && auth.mid) {
-            const _wlR = await fetch(APPS_SCRIPT_URL + "?action=getData&key=wlPending", { signal: AbortSignal.timeout(8000) });
-            const _wlD = await _wlR.json();
-            const _allPending = JSON.parse((_wlD && _wlD.value) || "[]");
-            const _myPending = _allPending.filter(p => p.memberId === auth.mid && new Date(p.deadline) > new Date());
-            setPendingWL(_myPending);
-          }
-        } catch(e2) { /* pendingWL fetch error — non-critical */ }
-      } catch(e) { /* GAS timeout หรือ network error — skip this poll */ }
+      } catch (e) { console.log("Polling error:", e); }
       if (_sd) _sd.style.display = "none";
     };
     const _tid = setInterval(_poll, 30000);
     return () => { clearInterval(_tid); if (_sd) _sd.style.display = "none"; };
-  }, [isAdmin]);
+  }, [isAdmin]
 
   const unreadCount = useMemo(() => cur ? (notifications || []).filter((n) => n.mid === cur.id && !n.read).length : 0, [notifications, cur]);
   const pendingGuestCount = useMemo(() => (guestBookings || []).filter((g) => g.status === "pending").length, [guestBookings]);
