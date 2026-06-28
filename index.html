@@ -2817,55 +2817,47 @@ function App() {
                 await store.set("apex_classes", _sheetsClasses);
                 console.log("✅ Sheets classes:", _sheetsClasses.length);
               }
-            // โหลด Sessions จาก Sheets และแปลง format
+            // โหลด Sessions จาก Sheets และแปลง format พร้อมตรวจสอบความเชื่อมโยงข้อมูลเต็มรูปแบบ
             if (_sd.sessions && _sd.sessions.length > 0 && _sheetsClasses) {
               var _clsMap = {};
               _sheetsClasses.forEach(function(c){ _clsMap[c.id] = c; });
-              var _DIM = {"#F97316":"#431407","#22C55E":"#052e16","#EF4444":"#450a0a","#A855F7":"#2e1065","#F59E0B":"#451a03","#10B981":"#022c22"};
+              var _DIM = {"#F97316":"#431407","#22C55E":"#052e16","#EF4444":"#450a0a","#A855F7":"#2e1065","#F59E0B":"#451a03","#10B981":"#022c22","#3B82F6":"#172554","#06B6D4":"#083344"};
               var _sessionMap = {};
+              
               _sd.sessions.forEach(function(s){
-                var cls = _clsMap[String(s.classId||"")];
-                if (!cls) return;
-                var col = cls.col || cls.color || "#F97316";
-                var _bk = String(s.bookings||"").split(",").map(function(x){return x.trim();}).filter(Boolean);
-                // Fix concatenated phone IDs from Google Sheets number-formatting bug (e.g. "815319110858634000" = two 9-digit IDs merged)
+                var cls = _clsMap[String(s.classId||"")]; if (!cls) return;
+                var sDate = String(s.date||"").replace(/T.*/,"").slice(0,10);
+                if (!sDate || sDate.length !== 10) return;
+                var targetSid = cls.id + "_" + sDate;
+                
+                var _bk = String(s.bookings||"").split(",").map(function(x){return x.trim();}).filter(function(x){return x.length >= 5;});
                 var _bkFixed=[]; _bk.forEach(function(mid){if(/^\d{15,}$/.test(mid)){var h=Math.floor(mid.length/2);_bkFixed.push(mid.slice(0,h));_bkFixed.push(mid.slice(h));}else{_bkFixed.push(mid);}}); _bk=_bkFixed;
-                var _wl = String(s.waitlist||"").split(",").map(function(x){return x.trim();}).filter(Boolean);
-                var _t  = s.timeOverride || cls.t || cls.time;
-                // Dedup: prefer rescheduled row (has timeOverride), then row with more bookings
-                if (_sessionMap[s.id]) {
-                  var _prev = _sessionMap[s.id];
-                  if (s.timeOverride && !_prev._hasTO) {
-                    _sessionMap[s.id].t = _t; _sessionMap[s.id]._hasTO = true;
-                    if (_bk.length > 0) { _sessionMap[s.id].bk = _bk; _sessionMap[s.id].wl = _wl; }
-                  } else if (!s.timeOverride && !_prev._hasTO && _bk.length > _prev.bk.length) {
-                    _sessionMap[s.id].bk = _bk; _sessionMap[s.id].wl = _wl;
-                  }
-                  return;
-                }
-                _sessionMap[s.id] = {
-                  id: s.id, cid: cls.id, name: cls.name, ins: cls.ins||cls.instructor,
-                  date: String(s.date||"").replace(/T.*/,"").slice(0,10), t: _t, dur: parseInt(cls.dur||cls.duration)||60,
-                  cap: parseInt(cls.cap||cls.capacity)||12, wlCap: parseInt(cls.wl||cls.waitlistCap)||8,
-                  col, dim: _DIM[col]||"#1a0a00", ico: cls.ico||cls.icon||"🏋️",
-                  bk: _bk, wl: _wl, att: {}, _hasTO: !!s.timeOverride
+                var _wl = String(s.waitlist||"").split(",").map(function(x){return x.trim();}).filter(function(x){return x.length >= 5;});
+                var _t  = s.timeOverride || cls.t;
+                
+                _sessionMap[targetSid] = {
+                  id: targetSid, cid: cls.id, name: cls.name, ins: cls.ins,
+                  date: sDate, t: _t, dur: cls.dur, cap: cls.cap, wlCap: cls.wlCap,
+                  col: cls.col, dim: _DIM[cls.col]||"#1a0a00", ico: cls.ico,
+                  bk: _bk, wl: _wl, att: {}
                 };
               });
-              // Cross-reference Bookings sheet → populate bk accurately (Sessions.bookings col may be stale)
+
               if (_sd.bookings && Array.isArray(_sd.bookings)) {
                 _sd.bookings.forEach(function(bkRow) {
                   var sid = String(bkRow.sessionId||"").trim();
                   var mid = String(bkRow.memberId||"").trim();
-                  if (!sid || !mid || !_sessionMap[sid]) return;
-                  var t = String(bkRow.type||"main").trim();
-                  if (t === "main" || t === "") {
-                    if (_sessionMap[sid].bk.indexOf(mid) === -1) _sessionMap[sid].bk.push(mid);
-                  } else if (t === "waitlist") {
-                    if (_sessionMap[sid].wl.indexOf(mid) === -1) _sessionMap[sid].wl.push(mid);
+                  if (_sessionMap[sid]) {
+                    var type = String(bkRow.type||"main").trim();
+                    if (type === "main" || type === "") {
+                      if (_sessionMap[sid].bk.indexOf(mid) === -1) _sessionMap[sid].bk.push(mid);
+                    } else if (type === "waitlist") {
+                      if (_sessionMap[sid].wl.indexOf(mid) === -1) _sessionMap[sid].wl.push(mid);
+                    }
                   }
                 });
               }
-              // Cross-reference Attendance sheet → populate att
+
               if (_sd.attendance && Array.isArray(_sd.attendance)) {
                 _sd.attendance.forEach(function(a) {
                   var sid = String(a.sessionId||"").trim();
@@ -2873,8 +2865,8 @@ function App() {
                   if (_sessionMap[sid] && mid && a.status) _sessionMap[sid].att[mid] = String(a.status);
                 });
               }
-              if (Object.keys(_sessionMap).length > 0) {
-                _sheetsSessions = _sessionMap;
+
+              if (Object.keys(_sessionMap).length > 0) {   _sheetsSessions = _sessionMap;
                 console.log("✅ Sheets sessions:", Object.keys(_sessionMap).length);
               }
             }
