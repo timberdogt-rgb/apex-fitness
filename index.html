@@ -3401,24 +3401,25 @@ function App() {
   
 
   
-// ── Admin real-time polling (Stabilized) ────────────────
+
+
+
+// ── Admin real-time polling ────────────────
   useEffect(() => {
     if (!isAdmin || !APPS_SCRIPT_URL) return;
     const _poll = async () => {
       try {
-        const _r = await fetch(APPS_SCRIPT_URL + "?action=getAll", { signal: AbortSignal.timeout(15000) });
+        const _r = await fetch(APPS_SCRIPT_URL + "?action=getAll", { signal: AbortSignal.timeout(30000) });
         const _d = await _r.json();
-        if (_d && _d.members) {
-            setMembers(_d.members);
-            if (_d.sessions) setSessions(buildSessions(_d.classes || []));
-            if (_d.guestBookings) setGuestBookings(_d.guestBookings);
+        if (_d) {
+          if (_d.members) { setMembers(_d.members); await store.set("apex_members", _d.members); }
+          if (_d.sessions) { setSessions(buildSessions(_d.classes || [])); await store.set("apex_sessions", _d.sessions); }
         }
       } catch (e) { console.log("Polling error:", e); }
     };
     const _tid = setInterval(_poll, 30000);
     return () => clearInterval(_tid);
   }, [isAdmin]);
-
 const unreadCount = useMemo(() => cur ? (notifications || []).filter((n) => n.mid === cur.id && !n.read).length : 0, [notifications, cur]);
   const pendingGuestCount = useMemo(() => (guestBookings || []).filter((g) => g.status === "pending").length, [guestBookings]);
   const openFeedbackCount = useMemo(() => (feedback || []).filter((f) => f.status === "open").length, [feedback]);
