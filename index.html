@@ -660,7 +660,8 @@ body.apex-light {
     };
   </script>
   <script>
-    const { useState, useEffect, useMemo, useCallback, useRef } = React;
+    const healIdList = (str) => { if (!str) return []; var parts = String(str).split(',').map(x => x.trim()).filter(Boolean); if (parts.length > 2 && parts.every(p => /^\d+$/.test(p)) && parts.slice(1).every(p => p.length === 3)) { var glued = parts.join(''); var chunks = []; for (var i = 0; i < glued.length; i += 9) chunks.push(glued.slice(i, i + 9)); return chunks; } return parts; };
+const { useState, useEffect, useMemo, useCallback, useRef } = React;
     // ฟังก์ชันพิเศษสำหรับเยียวยาและหลอมรวมเศษรหัสสมาชิกที่ถูก Google Sheets แปลงเป็นฟอร์แมตตัวเลขคอมมา
     const parseIdList = (str) => {
       if (!str) return [];
@@ -2153,7 +2154,8 @@ function AdminMembers({ members, sessions, settings, onSaveMember, onUnlockDevic
   }));
 }
 function AdminExpiringMembers({ members }) {
-  const { useState, useMemo, useEffect } = React;
+  const healIdList = (str) => { if (!str) return []; var parts = String(str).split(',').map(x => x.trim()).filter(Boolean); if (parts.length > 2 && parts.every(p => /^\d+$/.test(p)) && parts.slice(1).every(p => p.length === 3)) { var glued = parts.join(''); var chunks = []; for (var i = 0; i < glued.length; i += 9) chunks.push(glued.slice(i, i + 9)); return chunks; } return parts; };
+const { useState, useMemo, useEffect } = React;
   const WARN_DAYS = 7;
   const todayStr = fmt(TODAY);
 
