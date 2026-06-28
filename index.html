@@ -1480,4 +1480,400 @@ function AdminFeedback({ feedback, onResolve, showToast }) {
     setResponseText("");
     setBusy(false);
   };
-  return /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("div", { style: { color: C.muted, fontSize: 11, fontWeight: 700, letterSpacing: 2, marginBottom: 10 } }, "💬 รอตอบ (" + open.length + ")"), open.length === 0 ? /* @__PURE__ */ React.createElement("div", { style: { textAlign: "center", padding: "40px 0", color: C.muted, fontSize: 13 } }, "ไม่มีข้อความรอตอบ") : open.map((f) => /* @__PURE__ */ React.createElement("div", { key: f.id, style: { background: C.surf, borderRadius: 14, border: `1px solid ${f.type === "issue" ? C.red : C.border}`, padding: 16, marginBottom: 12 } }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", justifyContent: "space-between", marginBottom: 6 } }, /* @__PURE__ */ React.createElement("span", { style: { fontSize: 12, fontWeight: 700, color: f.type === "issue" ? C.red :
+  return /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("div", { style: { color: C.muted, fontSize: 11, fontWeight: 700, letterSpacing: 2, marginBottom: 10 } }, "💬 รอตอบ (" + open.length + ")"), open.length === 0 ? /* @__PURE__ */ React.createElement("div", { style: { textAlign: "center", padding: "40px 0", color: C.muted, fontSize: 13 } }, "ไม่มีข้อความรอตอบ") : open.map((f) => /* @__PURE__ */ React.createElement("div", { key: f.id, style: { background: C.surf, borderRadius: 14, border: `1px solid ${f.type === "issue" ? C.red : C.border}`, padding: 16, marginBottom: 12 } }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", justifyContent: "space-between", marginBottom: 6 } }, /* @__PURE__ */ React.createElement("span", { style: { fontSize: 12, fontWeight: 700, color: f.type === "issue" ? C.red : C.blue } }, f.type === "issue" ? "⚠️ แจ้งปัญหา" : "💡 ข้อเสนอแนะ"), /* @__PURE__ */ React.createElement("span", { style: { color: C.muted, fontSize: 11 } }, timeAgo(f.createdAt))), /* @__PURE__ */ React.createElement("div", { style: { color: C.text, fontWeight: 700, fontSize: 13, marginBottom: 4 } }, f.memberName || f.memberId), /* @__PURE__ */ React.createElement("div", { style: { color: C.sub, fontSize: 13, lineHeight: 1.6, marginBottom: 10 } }, f.message), responding === f.id ? /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("textarea", { value: responseText, onChange: (e) => setResponseText(e.target.value), placeholder: "พิมพ์คำตอบกลับ (จะส่งแจ้งสมาชิก)...", rows: 3, style: { width: "100%", padding: 10, background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, fontSize: 13, boxSizing: "border-box", fontFamily: FONT, marginBottom: 8 } }), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 8 } }, /* @__PURE__ */ React.createElement(Btn, { label: "ยกเลิก", bg: C.surf, col: C.muted, onClick: () => setResponding(null), full: true, disabled: busy }), /* @__PURE__ */ React.createElement(Btn, { label: "✓ ส่งคำตอบ", bg: C.green, onClick: () => handleResolve(f.id, true), full: true, disabled: busy }))) : /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 8 } }, /* @__PURE__ */ React.createElement(Btn, { label: "ปิดโดยไม่ตอบ", bg: C.surf, col: C.muted, onClick: () => handleResolve(f.id, false), full: true, disabled: busy }), /* @__PURE__ */ React.createElement(Btn, { label: "💬 ตอบกลับ", bg: C.bM, col: C.blue, onClick: () => { setResponding(f.id); setResponseText(""); }, full: true, disabled: busy })))), resolved.length > 0 && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { style: { color: C.muted, fontSize: 11, fontWeight: 700, letterSpacing: 2, marginTop: 20, marginBottom: 10 } }, "ตอบแล้ว"), resolved.map((f) => /* @__PURE__ */ React.createElement("div", { key: f.id, style: { padding: "9px 12px", background: C.surf, borderRadius: 10, border: `1px solid ${C.border}`, marginBottom: 6 } }, /* @__PURE__ */ React.createElement("div", { style: { color: C.text, fontSize: 12, fontWeight: 600 } }, f.memberName + " · " + (f.type === "issue" ? "⚠️" : "💡") + " " + f.message.slice(0, 60)), f.response && /* @__PURE__ */ React.createElement("div", { style: { color: C.muted, fontSize: 11, marginTop: 3 } }, "→ " + f.response)))));
+}
+function AdminReports({ sessions, members, classes, showToast, postAction }) {
+  const { useState } = React;
+  const [exporting, setExporting] = useState(false);
+  const totalBk  = Object.values(sessions).reduce((n,s)=>n+s.bk.length,0);
+  const totalWL  = Object.values(sessions).reduce((n,s)=>n+s.wl.length,0);
+  const totalAtt = Object.values(sessions).reduce((n,s)=>n+Object.values(s.att).filter(v=>v==="present").length,0);
+  const totalNS  = Object.values(sessions).reduce((n,s)=>n+Object.values(s.att).filter(v=>v==="noshow").length,0);
+  const mMonthly    = members.filter(m=>normMembershipType(m.membershipType)==="monthly").length;
+  const mPerSession = members.filter(m=>normMembershipType(m.membershipType)==="per_session").length;
+  const mActive     = members.filter(m=>memberStatus(m)==="active").length;
+  const mSuspended  = members.filter(m=>m.suspended===true||String(m.suspended).toUpperCase()==="TRUE").length;
+
+  const doExport = async () => {
+    setExporting(true);
+    try {
+      await postAction("exportReport", { type: "monthly" });
+      showToast("✅ Export สำเร็จ → Google Sheets!", "ok");
+    } catch(e) {
+      showToast("❌ Export ไม่สำเร็จ: " + e.message, "err");
+    }
+    setExporting(false);
+  };
+
+  const doLineNotify = async () => {
+    try {
+      await postAction("lineReportSummary", {});
+      showToast("✅ ส่ง LINE สรุปคลาสแล้ว!", "ok");
+    } catch(e) {
+      showToast("❌ ไม่สำเร็จ: " + e.message, "err");
+    }
+  };
+
+  return /* @__PURE__ */ React.createElement("div", null,
+    /* @__PURE__ */ React.createElement("div", { style: { display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:14 } },
+      [
+        ["🎟️", "การจอง", totalBk, C.orange],
+        ["✅", "เข้าร่วม", totalAtt, C.green],
+        ["🪑", "สำรอง", totalWL, C.amber],
+        ["❌", "No-show", totalNS, C.red],
+      ].map(([ic,lb,v,col])=>
+        /* @__PURE__ */ React.createElement("div", { key:lb, style:{background:C.surf,borderRadius:12,padding:"14px 16px",border:`1px solid ${C.border}`,textAlign:"center"} },
+          /* @__PURE__ */ React.createElement("div", { style:{fontSize:22} }, ic),
+          /* @__PURE__ */ React.createElement("div", { style:{fontSize:24,fontWeight:900,color:col,margin:"4px 0"} }, v),
+          /* @__PURE__ */ React.createElement("div", { style:{fontSize:11,color:C.muted} }, lb)
+        )
+      )
+    ),
+    /* @__PURE__ */ React.createElement("div", { style:{background:C.surf,borderRadius:14,border:`1px solid ${C.border}`,padding:18,marginBottom:14} },
+      /* @__PURE__ */ React.createElement("div", { style:{fontWeight:700,fontSize:14,color:C.text,marginBottom:14} }, "📈 Fill Rate ต่อคลาส"),
+      classes.map(cl=>{
+        const sl=Object.values(sessions).filter(s=>s.cid===cl.id);
+        const bk=sl.reduce((n,s)=>n+s.bk.length,0), cap=sl.reduce((n,s)=>n+s.cap,0);
+        const pct=cap>0?Math.round(bk/cap*100):0;
+        return /* @__PURE__ */ React.createElement("div",{key:cl.id,style:{marginBottom:14}},
+          /* @__PURE__ */ React.createElement("div",{style:{display:"flex",justifyContent:"space-between",marginBottom:4}},
+            /* @__PURE__ */ React.createElement("span",{style:{color:C.sub,fontSize:13}},cl.ico + " " + cl.name),
+            /* @__PURE__ */ React.createElement("div",{style:{display:"flex",gap:8}},
+              /* @__PURE__ */ React.createElement("span",{style:{color:C.muted,fontSize:11}},bk + "/" + cap),
+              /* @__PURE__ */ React.createElement("span",{style:{color:cl.col,fontWeight:800,fontSize:13}},pct + "%")
+            )
+          ),
+          /* @__PURE__ */ React.createElement("div",{style:{height:6,background:C.border,borderRadius:3,overflow:"hidden"}},
+            /* @__PURE__ */ React.createElement("div",{style:{height:"100%",width:`${pct}%`,background:cl.col,borderRadius:3}})
+          )
+        );
+      })
+    ),
+    /* @__PURE__ */ React.createElement("div", { style:{background:C.surf,borderRadius:14,border:`1px solid ${C.border}`,padding:18,marginBottom:14} },
+      /* @__PURE__ */ React.createElement("div", { style:{fontWeight:700,fontSize:14,color:C.text,marginBottom:14} }, "👥 สถานะสมาชิก"),
+      [
+        ["📅 รายเดือน", mMonthly, C.orange],
+        ["🎟️ รายครั้ง", mPerSession, C.blue],
+        ["💚 Active", mActive, C.green],
+        ["🚫 ถูกระงับ", mSuspended, C.red],
+      ].map(([lb,v,col])=>
+        /* @__PURE__ */ React.createElement("div",{key:lb,style:{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"9px 0",borderBottom:`1px solid ${C.border}`}},
+          /* @__PURE__ */ React.createElement("span",{style:{color:C.muted,fontSize:13}},lb),
+          /* @__PURE__ */ React.createElement("span",{style:{color:col,fontWeight:800,fontSize:16}},v)
+        )
+      )
+    ),
+    /* @__PURE__ */ React.createElement("div", { style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12} },
+      /* @__PURE__ */ React.createElement("div", {
+        onClick: doExport,
+        style:{background:C.gM,border:`1px solid rgba(34,197,94,.3)`,borderRadius:14,padding:18,cursor:"pointer",textAlign:"center",opacity:exporting?0.6:1}
+      },
+        /* @__PURE__ */ React.createElement("div",{style:{fontSize:30,marginBottom:8}},"📊"),
+        /* @__PURE__ */ React.createElement("div",{style:{color:C.green,fontWeight:700,fontSize:13}},"Google Sheets"),
+        /* @__PURE__ */ React.createElement("div",{style:{color:C.muted,fontSize:11,marginTop:2}},exporting?"กำลัง Export...":"Export รายงาน")
+      ),
+      /* @__PURE__ */ React.createElement("div", {
+        onClick: doLineNotify,
+        style:{background:C.lineM,border:`1px solid ${C.line}`,borderRadius:14,padding:18,cursor:"pointer",textAlign:"center"}
+      },
+        /* @__PURE__ */ React.createElement("div",{style:{fontSize:30,marginBottom:8}},"💬"),
+        /* @__PURE__ */ React.createElement("div",{style:{color:C.line,fontWeight:700,fontSize:13}},"LINE Notify"),
+        /* @__PURE__ */ React.createElement("div",{style:{color:C.muted,fontSize:11,marginTop:2}},"ส่งสรุปคลาส")
+      )
+    )
+  );
+}
+function AdminSettings({ settings, onSave, members, onUnlockDevice, showToast, onUploadImage, postAction, etiquetteRules, onSaveEtiquette }) {
+  const [form, setForm] = useState(__spreadValues({}, settings));
+  const [qrUploading, setQrUploading] = useState(false);
+  const [scheduleImgUploading, setScheduleImgUploading] = useState(false);
+  const [pinForm, setPinForm] = useState({ cur: "", new1: "", new2: "" });
+  const [pinSaving, setPinSaving] = useState(false);
+  const [etqRules, setEtqRules] = useState(() => (etiquetteRules || DEFAULT_ETIQUETTE_RULES).map(r => ({ ...r })));
+  const [etqSaving, setEtqSaving] = useState(false);
+  const [etqEditIdx, setEtqEditIdx] = useState(null);
+  const changePin = async () => {
+    if (!pinForm.cur) { showToast("⚠️ ใส่รหัสเดิมก่อน", "warn"); return; }
+    if (pinForm.new1.length < 4) { showToast("⚠️ รหัสใหม่ต้องมีอย่างน้อย 4 ตัว", "warn"); return; }
+    if (pinForm.new1 !== pinForm.new2) { showToast("⚠️ รหัสใหม่ไม่ตรงกัน", "warn"); return; }
+    setPinSaving(true);
+    try {
+      const res = await postAction("changeAdminPin", { currentPin: pinForm.cur, newPin: pinForm.new1 });
+      if (res && res.ok) { showToast("✅ เปลี่ยนรหัส Admin แล้ว", "ok"); setPinForm({ cur: "", new1: "", new2: "" }); }
+      else { showToast("❌ " + ((res && res.error) || "error"), "err"); }
+    } catch(e) { showToast("❌ " + e.message, "err"); }
+    setPinSaving(false);
+  };
+  const F = (k, lb, tp = "text", pl = "") => /* @__PURE__ */ React.createElement("div", { style: { marginBottom: 14 } }, /* @__PURE__ */ React.createElement("div", { style: { color: C.muted, fontSize: 12, fontWeight: 600, marginBottom: 5 } }, lb), /* @__PURE__ */ React.createElement("input", { value: form[k] || "", onChange: (e) => setForm((p) => __spreadProps(__spreadValues({}, p), { [k]: e.target.value })), type: tp, placeholder: pl, style: { width: "100%", padding: "11px 12px", background: C.bg, border: `1px solid ${C.border}`, borderRadius: 9, color: C.text, fontSize: 14, boxSizing: "border-box", outline: "none", fontFamily: FONT } }));
+  const handleQrUpload = async (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    setQrUploading(true);
+    try {
+      const compressed = await compressImage(file, 600, 0.9);
+      if (onUploadImage) {
+        const res = await onUploadImage(compressed, "qr_" + Date.now() + ".jpg");
+        if (res && res.ok && res.url) {
+          setForm((p) => Object.assign({}, p, { guestQrImage: res.url }));
+        } else { showToast("อัปโหลด QR ไม่สำเร็จ", "err"); }
+      } else {
+        setForm((p) => Object.assign({}, p, { guestQrImage: compressed }));
+      }
+    } catch (err) { showToast("อัปโหลด QR ไม่สำเร็จ", "err"); }
+    setQrUploading(false);
+  };
+  const handleScheduleImgUpload = async (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    setScheduleImgUploading(true);
+    try {
+      const compressed = await compressImage(file, 1400, 0.8);
+      if (onUploadImage) {
+        const res = await onUploadImage(compressed, "schedule_" + Date.now() + ".jpg");
+        if (res && res.ok && res.url) {
+          setForm((p) => Object.assign({}, p, { scheduleImage: res.url }));
+        } else { showToast("อัปโหลดรูปตารางไม่สำเร็จ", "err"); }
+      } else {
+        setForm((p) => Object.assign({}, p, { scheduleImage: compressed }));
+      }
+    } catch (err) { showToast("อัปโหลดรูปตารางไม่สำเร็จ", "err"); }
+    setScheduleImgUploading(false);
+  };
+  const linked = members.filter((m) => m.deviceId);
+  return /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("div", { style: { background: C.surf, borderRadius: 14, border: `1px solid ${C.border}`, padding: 20, marginBottom: 14 } }, /* @__PURE__ */ React.createElement("div", { style: { color: C.text, fontWeight: 700, marginBottom: 16, fontSize: 14 } }, "📞 ข้อมูลติดต่อ (แสดงเมื่อคลาสเต็ม)"), F("contactPhone", "เบอร์โทรศัพท์", "tel", "066-123-4567"), F("contactLine", "LINE ID", "text", "@apexfitness"), F("lineOfficialUrl", "LINE Official URL", "text", "https://line.me/R/ti/p/@apexfitness"), F("gymName", "ชื่อ Gym", "text", "Apex Fitness")), /* @__PURE__ */ React.createElement("div", { style: { background: C.surf, borderRadius: 14, border: `1px solid ${C.border}`, padding: 20, marginBottom: 14 } }, /* @__PURE__ */ React.createElement("div", { style: { color: C.text, fontWeight: 700, marginBottom: 16, fontSize: 14 } }, "⚙️ กฎระบบ"), F("noShowLimit", "No-show สูงสุด (ครั้ง)", "number", "3"), F("suspensionDays", "ระงับกี่วัน", "number", "14"), F("checkinBeforeMin", "เช็คอินก่อนกี่นาที", "number", "10"), F("checkinAfterMin", "สายได้กี่นาที", "number", "5")), /* @__PURE__ */ React.createElement("div", { style: { background: C.surf, borderRadius: 14, border: `1px solid ${C.border}`, padding: 20, marginBottom: 14 } }, /* @__PURE__ */ React.createElement("div", { style: { color: C.text, fontWeight: 700, marginBottom: 4, fontSize: 14 } }, "📅 กฎการจอง & ยกเลิก"), /* @__PURE__ */ React.createElement("div", { style: { color: C.muted, fontSize: 12, marginBottom: 14 } }, "ควบคุมช่วงเวลาเปิด/ปิดรับจองออนไลน์ เพื่อเก็บที่ว่างไว้ให้ Walk-in"), F("bookingOpenDaysAhead", "จองล่วงหน้าได้สูงสุด (วัน)", "number", "7"), F("bookingCloseHoursBefore", "ปิดรับจองออนไลน์ก่อนเริ่มคลาส (ชม.)", "number", "2"), F("cancelHoursLimit", "ยกเลิกก่อนเริ่มกี่ชม. ถือเป็น No-show", "number", "2"), F("maxActiveBookings", "จองล่วงหน้าพร้อมกันได้สูงสุด (คลาส/คน, 0=ไม่จำกัด)", "number", "5")), /* @__PURE__ */ React.createElement("div", { style: { background: C.surf, borderRadius: 14, border: `1px solid ${C.border}`, padding: 20, marginBottom: 14 } }, /* @__PURE__ */ React.createElement("div", { style: { color: C.text, fontWeight: 700, marginBottom: 4, fontSize: 14 } }, "🎁 โปรโมชั่นต่ออายุ"), /* @__PURE__ */ React.createElement("div", { style: { color: C.muted, fontSize: 12, marginBottom: 14 } }, "แจ้งลูกค้าก่อนหมดอายุ พร้อมส่วนลด"), F("expiryReminderDays", "แจ้งก่อนหมดอายุ (วัน)", "number", "5"), F("renewalPromo1Month", "ส่วนลด ต่อ 1 เดือน (บาท)", "number", "100"), F("renewalPromo3Month", "ส่วนลด ต่อ 3 เดือน (บาท)", "number", "300")), /* @__PURE__ */ React.createElement("div", { style: { background: C.surf, borderRadius: 14, border: `1px solid ${C.border}`, padding: 20, marginBottom: 14 } }, /* @__PURE__ */ React.createElement("div", { style: { color: C.text, fontWeight: 700, marginBottom: 4, fontSize: 14 } }, "💳 Walk-in / รายครั้ง"), /* @__PURE__ */ React.createElement("div", { style: { color: C.muted, fontSize: 12, marginBottom: 14 } }, "สำหรับลูกค้าที่ไม่มีสมาชิก จ่ายรายครั้งผ่าน QR"), F("guestPrice", "ราคาต่อครั้ง (บาท)", "number", "150"), /* @__PURE__ */ React.createElement("div", { style: { marginBottom: 8 } }, /* @__PURE__ */ React.createElement("div", { style: { color: C.muted, fontSize: 12, fontWeight: 600, marginBottom: 5 } }, "QR โค้ดรับเงิน (แม่มณี / พร้อมเพย์)"), form.guestQrImage && /* @__PURE__ */ React.createElement("img", { src: form.guestQrImage, alt: "QR", style: { width: 140, height: 140, objectFit: "contain", background: "#fff", borderRadius: 10, padding: 8, marginBottom: 8 } }), /* @__PURE__ */ React.createElement("label", { style: { display: "inline-block", padding: "9px 16px", background: C.bM, border: `1px solid ${C.blue}`, borderRadius: 9, color: C.blue, fontSize: 12, fontWeight: 700, cursor: "pointer" } }, qrUploading ? "⏳ กำลังอัปโหลด..." : (form.guestQrImage ? "📷 เปลี่ยนรูป QR" : "📷 อัปโหลดรูป QR"), /* @__PURE__ */ React.createElement("input", { type: "file", accept: "image/*", style: { display: "none" }, onChange: handleQrUpload })))), /* @__PURE__ */ React.createElement("div", { style: { background: C.surf, borderRadius: 14, border: `1px solid ${C.border}`, padding: 20, marginBottom: 14 } }, /* @__PURE__ */ React.createElement("div", { style: { color: C.text, fontWeight: 700, marginBottom: 4, fontSize: 14 } }, "🖼️ รูปตารางคลาส"), /* @__PURE__ */ React.createElement("div", { style: { color: C.muted, fontSize: 12, marginBottom: 14 } }, "อัปโหลดโปสเตอร์ตารางคลาส — สมาชิกจะเห็นได้จากปุ่ม \"ดูตารางคลาส\" ในหน้าจอง"), form.scheduleImage && /* @__PURE__ */ React.createElement("img", { src: form.scheduleImage, alt: "Schedule", style: { width: "100%", borderRadius: 10, marginBottom: 10, display: "block" } }), /* @__PURE__ */ React.createElement("label", { style: { display: "inline-block", padding: "9px 16px", background: C.bM, border: `1px solid ${C.blue}`, borderRadius: 9, color: C.blue, fontSize: 12, fontWeight: 700, cursor: "pointer" } }, scheduleImgUploading ? "⏳ กำลังอัปโหลด..." : (form.scheduleImage ? "🖼️ เปลี่ยนรูปตาราง" : "🖼️ อัปโหลดรูปตาราง"), /* @__PURE__ */ React.createElement("input", { type: "file", accept: "image/*", style: { display: "none" }, onChange: handleScheduleImgUpload }))), /* @__PURE__ */ React.createElement("div", { style: { background: C.surf, borderRadius: 14, border: `1px solid ${C.border}`, padding: 20, marginBottom: 14 } }, /* @__PURE__ */ React.createElement("div", { style: { color: C.muted, fontSize: 11, fontWeight: 700, letterSpacing: 2, marginBottom: 12 } }, "🔒 อุปกรณ์ที่ผูกอยู่ (Device Lock)"), linked.length === 0 ? /* @__PURE__ */ React.createElement("div", { style: { color: C.muted, fontSize: 13 } }, "ยังไม่มีอุปกรณ์ผูกอยู่") : linked.map((m) => {
+    var _a;
+    return /* @__PURE__ */ React.createElement("div", { key: m.id, style: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: `1px solid ${C.border}` } }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("div", { style: { color: C.text, fontSize: 13 } }, m.name), /* @__PURE__ */ React.createElement("div", { style: { color: C.muted, fontSize: 11 } }, "เครื่อง: " + ((_a = m.deviceId) == null ? void 0 : _a.slice(0, 18)) + "...")), /* @__PURE__ */ React.createElement(Btn, { label: "🔓 ปลด", bg: C.pM, col: C.purple, onClick: () => onUnlockDevice(m.id), size: "sm" }));
+  })), /* @__PURE__ */ React.createElement("div", { style: { background: C.surf, borderRadius: 14, border: `1px solid ${C.border}`, padding: 20, marginBottom: 14 } },
+    /* @__PURE__ */ React.createElement("div", { style: { color: C.text, fontWeight: 700, marginBottom: 16, fontSize: 14 } }, "🔒 เปลี่ยนรหัส Admin"),
+    [
+      ["รหัสเดิม", "cur", "password", "รหัสปัจจุบัน"],
+      ["รหัสใหม่", "new1", "password", "อย่างน้อย 4 ตัว"],
+      ["ยืนยันรหัสใหม่", "new2", "password", "พิมพ์ซ้ำอีกครั้ง"],
+    ].map(([lb, fk, tp, ph]) => /* @__PURE__ */ React.createElement("div", { key: fk, style: { marginBottom: 12 } },
+      /* @__PURE__ */ React.createElement("div", { style: { color: C.muted, fontSize: 12, fontWeight: 600, marginBottom: 5 } }, lb),
+      /* @__PURE__ */ React.createElement("input", { type: tp, placeholder: ph, value: pinForm[fk], onChange: (e) => setPinForm(p => Object.assign({}, p, {[fk]: e.target.value})), style: { width: "100%", padding: "11px 12px", background: C.bg, border: `1px solid ${C.border}`, borderRadius: 9, color: C.text, fontSize: 14, boxSizing: "border-box", outline: "none", fontFamily: FONT } })
+    )),
+    /* @__PURE__ */ React.createElement(Btn, { label: pinSaving ? "กำลังเปลี่ยน..." : "🔒 เปลี่ยนรหัส Admin", bg: C.blue, onClick: changePin, full: true })
+  ), /* Announcement textarea */
+  React.createElement("div", { style: { background: C.surf, borderRadius: 14, border: `1px solid ${C.border}`, padding: 20, marginBottom: 14 } },
+    React.createElement("div", { style: { color: C.text, fontWeight: 700, fontSize: 14, marginBottom: 4 } }, "📢 ประกาศ / Announcement"),
+    React.createElement("div", { style: { color: C.muted, fontSize: 12, marginBottom: 10 } }, "แสดงแบนเนอร์ให้สมาชิกทุกคนเห็นเมื่อเข้าระบบ (เว้นว่างเพื่อปิด)"),
+    React.createElement("textarea", {
+      rows: 3, placeholder: "เช่น: ปิดซ่อมแซมวันที่ 1 ม.ค.", value: form.announcement || "",
+      onChange: (e) => setForm(f => ({ ...f, announcement: e.target.value })),
+      style: { width: "100%", padding: "10px 12px", background: C.bg, border: `1px solid ${C.border}`,
+               borderRadius: 9, color: C.text, fontSize: 13, boxSizing: "border-box",
+               outline: "none", fontFamily: FONT, resize: "vertical", lineHeight: 1.5 }
+    })
+  ),
+  React.createElement("div", { style: { background: C.surf, borderRadius: 14, border: `1px solid ${C.border}`, padding: 20, marginBottom: 14 } },
+    React.createElement("div", { style: { color: C.text, fontWeight: 700, fontSize: 14, marginBottom: 4 } }, "📋 กฎการจอง (แสดงให้สมาชิกเห็น)"),
+    React.createElement("div", { style: { color: C.muted, fontSize: 12, marginBottom: 10 } }, "ข้อความนี้จะแสดงในหน้าจองคลาสของสมาชิก (เว้นว่างเพื่อซ่อน)"),
+    React.createElement("textarea", {
+      rows: 5, placeholder: "เช่น:\n• จองล่วงหน้าได้สูงสุด 7 วัน\n• ยกเลิกก่อน 2 ชม. ไม่นับ No-show\n• No-show 3 ครั้งถูกระงับ 14 วัน",
+      value: form.bookingRules || "",
+      onChange: (e) => setForm(f => ({ ...f, bookingRules: e.target.value })),
+      style: { width: "100%", padding: "10px 12px", background: C.bg, border: `1px solid ${C.border}`,
+               borderRadius: 9, color: C.text, fontSize: 13, boxSizing: "border-box",
+               outline: "none", fontFamily: FONT, resize: "vertical", lineHeight: 1.6 }
+    })
+  ),
+  React.createElement("div", { style: { background: C.surf, borderRadius: 14, border: `1px solid ${C.border}`, padding: 20, marginBottom: 14 } },
+    React.createElement("div", { style: { color: C.text, fontWeight: 700, fontSize: 14, marginBottom: 4 } }, "⏳ แจ้งเตือนก่อนคลาส (LINE)"),
+    React.createElement("div", { style: { color: C.muted, fontSize: 12, marginBottom: 10 } }, "ส่งข้อความแจ้งเตือนผ่าน LINE ก่อนคลาสเริ่ม"),
+    React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 10, marginBottom: 10 } },
+      React.createElement("div", { style: { color: C.muted, fontSize: 13, whiteSpace: "nowrap" } }, "แจ้งก่อน"),
+      React.createElement("input", {
+        type: "number", min: 1, max: 24,
+        value: form.reminderHoursBefore || 2,
+        onChange: (e) => setForm(f => ({ ...f, reminderHoursBefore: parseInt(e.target.value) || 2 })),
+        style: { width: 64, padding: "8px 10px", background: C.bg, border: `1px solid ${C.border}`, borderRadius: 9, color: C.text, fontSize: 14, fontFamily: FONT, outline: "none", textAlign: "center" }
+      }),
+      React.createElement("div", { style: { color: C.muted, fontSize: 13 } }, "ชั่วโมง")
+    ),
+    React.createElement("button", {
+      onClick: async () => {
+        const res = await postAction("setupReminderTrigger", { hoursBefore: form.reminderHoursBefore || 2 }).catch(e => ({ ok:false, error: e.message }));
+        if (res && res.ok) showToast("✅ ตั้ง Trigger แล้ว!", "ok");
+        else showToast("❌ " + ((res && res.error) || "error"), "err");
+      },
+      style: { padding: "8px 16px", background: C.blue + "22", border: "1px solid " + C.blue + "44", borderRadius: 9, color: C.blue, fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: FONT }
+    }, "🔄 ตั้ง Reminder Trigger")
+  ),
+  /* @__PURE__ */ React.createElement(Btn, { label: "💾 บันทึกการตั้งค่า", bg: C.orange, onClick: () => {
+    onSave(__spreadProps(__spreadValues({}, form), { noShowLimit: parseInt(form.noShowLimit) || 3, suspensionDays: parseInt(form.suspensionDays) || 14, checkinBeforeMin: parseInt(form.checkinBeforeMin) || 10, checkinAfterMin: parseInt(form.checkinAfterMin) || 10, bookingOpenDaysAhead: parseInt(form.bookingOpenDaysAhead) || 7, bookingCloseHoursBefore: parseInt(form.bookingCloseHoursBefore) || 6, cancelHoursLimit: parseInt(form.cancelHoursLimit) || 6, maxActiveBookings: parseInt(form.maxActiveBookings) || 0, expiryReminderDays: parseInt(form.expiryReminderDays) || 5, renewalPromo1Month: parseInt(form.renewalPromo1Month) || 100, renewalPromo3Month: parseInt(form.renewalPromo3Month) || 300, guestPrice: parseInt(form.guestPrice) || 150 }));
+    showToast("บันทึกแล้ว ✓", "ok");
+  }, full: true }),
+  /* Etiquette Editor */
+  React.createElement("div", { style: { background: C.surf, borderRadius: 14, border: `1px solid ${C.border}`, padding: 20, marginTop: 14, marginBottom: 14 } },
+    React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 } },
+      React.createElement("div", null,
+        React.createElement("div", { style: { color: C.text, fontWeight: 700, fontSize: 14 } }, "🚨 กฎ Gym Etiquette"),
+        React.createElement("div", { style: { color: C.muted, fontSize: 11, marginTop: 2 } }, "แก้ไขกฎที่แสดงให้สมาชิกเห็น")
+      ),
+      React.createElement("button", {
+        onClick: () => { setEtqRules(prev => [...prev, { id: "e" + Date.now(), thai: "", eng: "" }]); setEtqEditIdx(etqRules.length); },
+        style: { padding: "6px 12px", background: C.gM, border: `1px solid ${C.green}`, borderRadius: 8, color: C.green, fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: FONT }
+      }, "+ เพิ่มกฎ")
+    ),
+    etqRules.map((rule, idx) =>
+      etqEditIdx === idx
+        ? React.createElement("div", { key: rule.id + "_edit", style: { background: C.bg, borderRadius: 10, padding: 12, marginBottom: 8 } },
+            React.createElement("input", { value: rule.title || "", placeholder: "หัวข้อ (เช่น 📴 โทรศัพท์)", onChange: e => setEtqRules(prev => prev.map((r,i) => i===idx ? Object.assign({},r,{title:e.target.value}) : r)), style: { width: "100%", padding: "8px 10px", background: C.surf, border: `1px solid ${C.border}`, borderRadius: 8, color: C.orange, fontSize: 12, fontWeight: 700, boxSizing: "border-box", outline: "none", fontFamily: FONT, marginBottom: 6 } }),
+            React.createElement("input", { value: rule.thai, placeholder: "ข้อความภาษาไทย", onChange: e => setEtqRules(prev => prev.map((r,i) => i===idx ? Object.assign({},r,{thai:e.target.value}) : r)), style: { width: "100%", padding: "8px 10px", background: C.surf, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, fontSize: 13, boxSizing: "border-box", outline: "none", fontFamily: FONT, marginBottom: 6 } }),
+            React.createElement("input", { value: rule.eng, placeholder: "English subtitle (optional)", onChange: e => setEtqRules(prev => prev.map((r,i) => i===idx ? Object.assign({},r,{eng:e.target.value}) : r)), style: { width: "100%", padding: "8px 10px", background: C.surf, border: `1px solid ${C.border}`, borderRadius: 8, color: C.muted, fontSize: 12, boxSizing: "border-box", outline: "none", fontFamily: FONT, marginBottom: 8 } }),
+            React.createElement("div", { style: { display: "flex", gap: 8 } },
+              React.createElement("button", { onClick: () => setEtqEditIdx(null), style: { flex: 1, padding: "7px 0", background: C.surf, border: `1px solid ${C.border}`, borderRadius: 8, color: C.muted, fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: FONT } }, "✓ เสร็จ"),
+              React.createElement("button", { onClick: () => { setEtqRules(prev => prev.filter((_,i) => i!==idx)); setEtqEditIdx(null); }, style: { padding: "7px 14px", background: "rgba(239,68,68,.1)", border: `1px solid ${C.red}`, borderRadius: 8, color: C.red, fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: FONT } }, "🗑️ ลบ")
+            )
+          )
+        : React.createElement("div", { key: rule.id + "_view", style: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "9px 0", borderBottom: `1px solid ${C.border}` } },
+            React.createElement("div", { style: { flex: 1, fontSize: 13, color: C.text } },
+              rule.title ? React.createElement("div", { style: { fontSize: 11, color: C.orange, fontWeight: 700, marginBottom: 2 } }, rule.title) : null,
+              "• " + (rule.thai || "(ยังไม่มีข้อความ)"),
+              rule.eng ? React.createElement("div", { style: { fontSize: 11, color: C.muted, marginTop: 1 } }, rule.eng) : null
+            ),
+            React.createElement("button", { onClick: () => setEtqEditIdx(idx), style: { marginLeft: 10, padding: "4px 10px", background: C.bM, border: `1px solid ${C.blue}`, borderRadius: 8, color: C.blue, fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: FONT } }, "✏️")
+          )
+    ),
+    React.createElement("div", { style: { marginTop: 14 } },
+      React.createElement(Btn, { label: etqSaving ? "⏳ กำลังบันทึก..." : "💾 บันทึกกฎ Etiquette", bg: C.green, full: true, disabled: etqSaving, onClick: async () => {
+        const valid = etqRules.filter(r => r.thai && r.thai.trim());
+        if (valid.length === 0) { showToast("⚠️ ต้องมีอย่างน้อย 1 กฎ", "warn"); return; }
+        setEtqSaving(true); setEtqEditIdx(null);
+        if (onSaveEtiquette) await onSaveEtiquette(valid);
+        setEtqRules(valid); setEtqSaving(false);
+      } })
+    )
+  ));
+}
+function GuestBookingFlow({ sessions, settings, onSubmit, onClose, showToast }) {
+  const [step, setStep] = useState("pick");
+  const [day, setDay] = useState(0);
+  const [selId, setSelId] = useState(null);
+  const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [slip, setSlip] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
+  const ds = fmt(shift(TODAY, day));
+  const openDays = parseInt(settings.bookingOpenDaysAhead) || 7;
+  const list = useMemo(() => Object.values(sessions).filter((s) => s.date === ds && s.bk.length < s.cap).sort((a, b) => a.t.localeCompare(b.t)), [sessions, ds]);
+  const sel = selId ? sessions[selId] : null;
+  const [slipCompressing, setSlipCompressing] = useState(false);
+  const handleSlip = async (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    setSlipCompressing(true);
+    try {
+      const compressed = await compressImage(file, 1000, 0.65);
+      setSlip(compressed);
+    } catch (err) {
+      showToast("อ่านรูปไม่สำเร็จ ลองใหม่อีกครั้ง", "err");
+    }
+    setSlipCompressing(false);
+  };
+  const handleSubmit = async () => {
+    if (!name.trim() || !phone.trim()) { showToast("กรอกชื่อและเบอร์โทรให้ครบ", "err"); return; }
+    if (!slip) { showToast("กรุณาอัปโหลดสลิปโอนเงิน", "err"); return; }
+    setSubmitting(true);
+    const res = await onSubmit({ name: name.trim(), phone: phone.trim(), sessionId: selId, slipBase64: slip });
+    setSubmitting(false);
+    if (res.ok) setStep("done");
+    else showToast(res.error || "เกิดข้อผิดพลาด ลองใหม่อีกครั้ง", "err");
+  };
+  const inputStyle = { width: "100%", padding: "12px 14px", background: C.bg, border: `1px solid ${C.border}`, borderRadius: 10, color: C.text, fontSize: 15, boxSizing: "border-box", outline: "none", fontFamily: FONT, marginBottom: 12 };
+  return /* @__PURE__ */ React.createElement(Overlay, { onClose }, step === "pick" && /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("div", { style: { color: C.text, fontWeight: 800, fontSize: 18, marginBottom: 4 } }, "🎟️ จองแบบ Walk-in"), /* @__PURE__ */ React.createElement("div", { style: { color: C.muted, fontSize: 12, marginBottom: 14 } }, "รายครั้ง บาท " + settings.guestPrice + " ต่อครั้ง — ไม่ต้องเป็นสมาชิก"), /* @__PURE__ */ React.createElement(DayStrip, { sel: day, set: setDay, sessions, daysCount: openDays }), list.length === 0 ? /* @__PURE__ */ React.createElement("div", { style: { textAlign: "center", padding: "30px 0", color: C.muted, fontSize: 13 } }, "ไม่มีคลาสว่างในวันนี้") : /* @__PURE__ */ React.createElement("div", { style: { maxHeight: 320, overflowY: "auto" } }, list.map((s) => /* @__PURE__ */ React.createElement("div", { key: s.id, onClick: () => { setSelId(s.id); setStep("info"); }, style: { padding: "11px 12px", borderRadius: 12, background: C.bg, border: `1px solid ${C.border}`, marginBottom: 8, cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" } }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("div", { style: { color: C.text, fontWeight: 700, fontSize: 13 } }, s.ico, " ", s.name), /* @__PURE__ */ React.createElement("div", { style: { color: C.muted, fontSize: 11, marginTop: 2 } }, s.t, " · ", s.ins)), /* @__PURE__ */ React.createElement(Pill, { text: `ว่าง ${s.cap - s.bk.length}`, color: C.green, bg: C.gM })))), /* @__PURE__ */ React.createElement(Btn, { label: "ปิด", bg: C.surf, col: C.muted, onClick: onClose, full: true })), step === "info" && sel && /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("div", { style: { color: C.text, fontWeight: 800, fontSize: 18, marginBottom: 4 } }, "📝 ข้อมูลของคุณ"), /* @__PURE__ */ React.createElement("div", { style: { color: C.orange, fontWeight: 700, fontSize: 13, marginBottom: 14 } }, sel.ico, " ", sel.name, " · ", sel.t), /* @__PURE__ */ React.createElement("input", { value: name, onChange: (e) => setName(e.target.value), placeholder: "ชื่อ-นามสกุล", style: inputStyle }), /* @__PURE__ */ React.createElement("input", { value: phone, onChange: (e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10)), placeholder: "เบอร์โทรศัพท์", type: "tel", style: inputStyle }), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 10 } }, /* @__PURE__ */ React.createElement(Btn, { label: "← ย้อนกลับ", bg: C.surf, col: C.muted, onClick: () => setStep("pick"), full: true }), /* @__PURE__ */ React.createElement(Btn, { label: "ถัดไป →", bg: C.orange, onClick: () => { if (!name.trim() || !phone.trim()) { showToast("กรอกชื่อและเบอร์โทรให้ครบ", "err"); return; } setStep("pay"); }, full: true }))), step === "pay" && sel && /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("div", { style: { color: C.text, fontWeight: 800, fontSize: 18, marginBottom: 4, textAlign: "center" } }, "💳 ชำระเงิน"), /* @__PURE__ */ React.createElement("div", { style: { color: C.muted, fontSize: 13, textAlign: "center", marginBottom: 14 } }, "ยอด: ", /* @__PURE__ */ React.createElement("strong", { style: { color: C.orange, fontSize: 18 } }, settings.guestPrice, " บาท")), settings.guestQrImage ? /* @__PURE__ */ React.createElement("img", { src: settings.guestQrImage, alt: "QR", style: { width: "100%", maxWidth: 220, display: "block", margin: "0 auto 16px", background: "#fff", borderRadius: 12, padding: 10 } }) : /* @__PURE__ */ React.createElement("div", { style: { textAlign: "center", color: C.muted, fontSize: 12, marginBottom: 16, padding: 20, background: C.bg, borderRadius: 10 } }, "ยังไม่มี QR โค้ด — ติดต่อ staff เพื่อรับ QR"), /* @__PURE__ */ React.createElement("div", { style: { marginBottom: 8 } }, /* @__PURE__ */ React.createElement("div", { style: { color: C.muted, fontSize: 12, fontWeight: 600, marginBottom: 6 } }, "อัปโหลดสลิปโอนเงิน"), slip && /* @__PURE__ */ React.createElement("img", { src: slip, alt: "slip", style: { width: 100, height: 100, objectFit: "cover", borderRadius: 10, marginBottom: 8 } }), /* @__PURE__ */ React.createElement("label", { style: { display: "block", textAlign: "center", padding: "11px 0", background: slipCompressing ? C.surf : C.bM, border: `1px solid ${slipCompressing ? C.border : C.blue}`, borderRadius: 10, color: slipCompressing ? C.muted : C.blue, fontWeight: 700, fontSize: 13, cursor: slipCompressing ? "default" : "pointer" } }, slipCompressing ? "⏳ กำลังเตรียมรูป..." : slip ? "📷 เปลี่ยนสลิป" : "📷 เลือกรูปสลิป", /* @__PURE__ */ React.createElement("input", { type: "file", accept: "image/*", disabled: slipCompressing, style: { display: "none" }, onChange: handleSlip }))), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 10, marginTop: 14 } }, /* @__PURE__ */ React.createElement(Btn, { label: "← ย้อนกลับ", bg: C.surf, col: C.muted, onClick: () => setStep("info"), full: true, disabled: submitting }), /* @__PURE__ */ React.createElement(Btn, { label: submitting ? "⏳ กำลังส่ง..." : "✓ ส่งหลักฐาน", bg: C.green, onClick: handleSubmit, full: true, disabled: submitting || slipCompressing }))), step === "done" && /* @__PURE__ */ React.createElement("div", { style: { textAlign: "center" } }, /* @__PURE__ */ React.createElement("div", { style: { fontSize: 52, marginBottom: 10 } }, "✅"), /* @__PURE__ */ React.createElement("div", { style: { color: C.text, fontWeight: 800, fontSize: 18, marginBottom: 8 } }, "ส่งหลักฐานแล้ว!"), /* @__PURE__ */ React.createElement("div", { style: { color: C.muted, fontSize: 13, lineHeight: 1.7, marginBottom: 20 } }, "รอ staff ตรวจสอบสลิปสักครู่—สองครู่\nจะยืนยันที่หน้างานเมื่อมาถึง"), /* @__PURE__ */ React.createElement(Btn, { label: "เสร็จสิ้น", bg: C.orange, onClick: onClose, full: true })));
+}
+function App() {
+  const [C2, dark, toggleTheme] = useTheme();
+  const [loading, setLoading] = useState(true);
+  const [deviceId, setDeviceId] = useState(null);
+  const [auth, setAuth] = useState(null);
+  const [members, setMembers] = useState([]);
+  const [sessions, setSessions] = useState({});
+  const [classes, setClasses] = useState(CLASSES);
+  const [settings, setSettings] = useState(DEFAULT_SETTINGS);
+  const [notifications, setNotifications] = useState([]);
+  const [guestBookings, setGuestBookings] = useState([]);
+  const [feedback, setFeedback] = useState([]);
+  const [pendingWL, setPendingWL] = useState([]); 
+  const [staff, setStaff] = useState([]);
+  const [etiquetteRules, setEtiquetteRules] = useState(DEFAULT_ETIQUETTE_RULES);
+  const [showGuestFlow, setShowGuestFlow] = useState(false);
+  const [showAdminMore, setShowAdminMore] = useState(false);
+  const [view, setView] = useState("schedule");
+  const [toast, setToast] = useState(null);
+  const showToast = useCallback((msg, ty = "ok") => {
+    setToast({ msg, ty });
+    setTimeout(() => setToast(null), 3500);
+  }, []);
+  useEffect(() => {
+    (async () => {
+      let _renderedFromCache = false;
+      try {
+        let did = await store.get("apex_device_id");
+        if (!did) {
+          did = "dev_" + uid();
+          await store.set("apex_device_id", did);
+        }
+        setDeviceId(did);
+
+        // ── Cache-first: โหลดจาก localStorage ก่อน แสดงผลทันที ──────
+        const _cM  = await store.get("apex_members");
+        const _cSe = await store.get("apex_sessions");
+        const _cSt = await store.get("apex_settings");
+        const _cCl = await store.get("apex_classes");
+        const _cNt = await store.get("apex_notifs");
+        const _cGb = await store.get("apex_guest_bookings");
+        const _cFb = await store.get("apex_feedback");
+        const _savedAuth = await store.get("apex_auth");
+        if (_savedAuth && (_savedAuth.type === "owner" || _savedAuth.type === "staff")) {
+          setAuth(_savedAuth);
+          setView(_savedAuth.type === "owner" ? "overview" : "attend");
+          setLoading(false);
+          _renderedFromCache = true;
+        }
+        if (_cM && _cM.length > 0) {
+          setMembers(_cM);
+          setSessions(_cSe && Object.keys(_cSe).length > 0 ? _cSe : buildSessions(_cCl || CLASSES));
+          setSettings(_cSt || DEFAULT_SETTINGS);
+          setClasses(_cCl || CLASSES);
+          setNotifications(_cNt || []);
+          setGuestBookings(_cGb || []);
+          setFeedback(_cFb || []);
+          if (_savedAuth && _savedAuth.type === "user") setAuth(_savedAuth);
+          if (!_renderedFromCache) { setLoading(false); _renderedFromCache = true; }
+        }
+
+        // ── Background refresh จาก Google Sheets ──────────────────────
+        let _sheetsMembers = null, _sheetsClasses = null, _sheetsSettings = null, _sheetsSessions = null, _sheetsGuestBookings = null, _sheetsFeedback = null;
+        if (APPS_SCRIPT_URL) {
+          try {
+            const _sr = await fetch(APPS_SCRIPT_URL + "?action=getAll", {signal: AbortSignal.timeout(12000)});
+            const _sd = await _sr.json();
+            if (_sd && _sd.members && _sd.members.length > 0) {
+              const _normalizedMembers = _sd.members.map(function(m) {
+                return {
+                  id: String(m.id||""), name: String(m.name||""),
+                  phone: String(m.phone||""), pin: String(m.pin||"1234"),
+                  lineId: String(m.lineId||""),
+                  membershipType: String(m.membershipType||"monthly"),
+                  membershipExpiry: m.membershipExpiry ? String(m.membershipExpiry).replace(/T.*/,"") : "",
+                  sessionsLeft: m.sessionsLeft !== "" && m.sessionsLeft !== null ? Number(m.sessionsLeft)||0 : null,
+                  noShowCount: Number(m.noShowCount)||0,
+                  suspended: m.suspended === true || String(m.suspended).toUpperCase() === "TRUE",
+                  suspendedUntil: m.suspendedUntil ? String(m.suspendedUntil).replace(/T.*/,"") : null,
+                  deviceId: m.deviceId ? String(m.deviceId) : null,
+                  joinDate: m.joinDate ? String(m.joinDate).replace(/T.*/,"") : "",
+                  photoUrl: m.photoUrl ? String(m.photoUrl) : "",
+                  lineUserId: m.lineUserId ? String(m.lineUserId) : "",
+                  noShowDates: m.noShowDates ? String(m.noShowDates) : "",
+                  penaltyLevel: m.penaltyLevel !== undefined && m.penaltyLevel !== "" ? Number(m.penaltyLevel) : 0,
+                  wlOptIn: m.wlOptIn === true || String(m.wlOptIn).toUpperCase() === "TRUE",
+                };
+              });
+              _sheetsMembers = _normalizedMembers;
+              await store.set("apex_members", _normalizedMembers);
+              console.log("✅ Sheets members:", _sd.members.length);
+            }
+            if (_sd && _sd.classes && _sd.classes.length
