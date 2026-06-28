@@ -2854,9 +2854,9 @@ function App() {
                 if (!sDate || sDate.length !== 10) return;
                 var targetSid = cls.id + "_" + sDate;
                 
-                var _bk = String(s.bookings||"").split(",").map(function(x){return x.trim();}).filter(function(x){return x.length >= 5;});
+                var _bk = parseIdList(s.bookings);{return x.trim();}).filter(function(x){return x.length >= 5;});
                 var _bkFixed=[]; _bk.forEach(function(mid){if(/^\d{15,}$/.test(mid)){var h=Math.floor(mid.length/2);_bkFixed.push(mid.slice(0,h));_bkFixed.push(mid.slice(h));}else{_bkFixed.push(mid);}}); _bk=_bkFixed;
-                var _wl = String(s.waitlist||"").split(",").map(function(x){return x.trim();}).filter(function(x){return x.length >= 5;});
+                var _wl = parseIdList(s.waitlist);{return x.trim();}).filter(function(x){return x.length >= 5;});
                 var _t  = s.timeOverride || cls.t;
                 
                 _sessionMap[targetSid] = {
@@ -3458,9 +3458,9 @@ function App() {
               if (!sDate || sDate.length !== 10) return;
               var targetSid = cls.id + "_" + sDate;
               
-              var _bk = String(s.bookings || "").split(",").map(function(x) { return x.trim(); }).filter(Boolean);
+              var _bk = parseIdList(s.bookings); { return x.trim(); }).filter(Boolean);
               var _bkFixed = []; _bk.forEach(function(mid) { if (/^\d{15,}$/.test(mid)) { var h = Math.floor(mid.length / 2); _bkFixed.push(mid.slice(0, h)); _bkFixed.push(mid.slice(h)); } else { _bkFixed.push(mid); } }); _bk = _bkFixed;
-              var _wl = String(s.waitlist || "").split(",").filter(Boolean).map(function(x) { return x.trim(); });
+              var _wl = parseIdList(s.waitlist);.map(function(x) { return x.trim(); });
               var _t = s.timeOverride || cls.t;
 
               _freshSessions[targetSid] = {
