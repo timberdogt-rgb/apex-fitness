@@ -2895,9 +2895,9 @@ function App() {
                 if (!sDate || sDate.length !== 10) return;
                 var targetSid = cls.id + "_" + sDate;
                 
-                var _bk = healIds(s.bookings);}).filter(function(x){return x.length >= 5;});
+                var _bk = healIds(s.bookings);{return x.length >= 5;});
                 var _bkFixed=[]; _bk.forEach(function(mid){if(/^\d{15,}$/.test(mid)){var h=Math.floor(mid.length/2);_bkFixed.push(mid.slice(0,h));_bkFixed.push(mid.slice(h));}else{_bkFixed.push(mid);}}); _bk=_bkFixed;
-                var _wl = healIds(s.waitlist);}).filter(function(x){return x.length >= 5;});
+                var _wl = healIds(s.waitlist);{return x.length >= 5;});
                 var _t  = s.timeOverride || cls.t;
                 
                 _sessionMap[targetSid] = {
