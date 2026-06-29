@@ -2760,6 +2760,15 @@ function GuestBookingFlow({ sessions, settings, onSubmit, onClose, showToast }) 
   return /* @__PURE__ */ React.createElement(Overlay, { onClose }, step === "pick" && /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("div", { style: { color: C.text, fontWeight: 800, fontSize: 18, marginBottom: 4 } }, "\u{1F3AB} \u0E08\u0E2D\u0E07\u0E41\u0E1A\u0E1A Walk-in"), /* @__PURE__ */ React.createElement("div", { style: { color: C.muted, fontSize: 12, marginBottom: 14 } }, "\u0E23\u0E32\u0E22\u0E04\u0E23\u0E31\u0E49\u0E07 \u0E1A\u0E32\u0E17 ", settings.guestPrice, " \u0E15\u0E48\u0E2D\u0E04\u0E23\u0E31\u0E49\u0E07 \u2014 \u0E44\u0E21\u0E48\u0E15\u0E49\u0E2D\u0E07\u0E40\u0E1B\u0E47\u0E19\u0E2A\u0E21\u0E32\u0E0A\u0E34\u0E01"), /* @__PURE__ */ React.createElement(DayStrip, { sel: day, set: setDay, sessions, daysCount: openDays }), list.length === 0 ? /* @__PURE__ */ React.createElement("div", { style: { textAlign: "center", padding: "30px 0", color: C.muted, fontSize: 13 } }, "\u0E44\u0E21\u0E48\u0E21\u0E35\u0E04\u0E25\u0E32\u0E2A\u0E27\u0E48\u0E32\u0E07\u0E43\u0E19\u0E27\u0E31\u0E19\u0E19\u0E35\u0E49") : /* @__PURE__ */ React.createElement("div", { style: { maxHeight: 320, overflowY: "auto" } }, list.map((s) => /* @__PURE__ */ React.createElement("div", { key: s.id, onClick: () => { setSelId(s.id); setStep("info"); }, style: { padding: "11px 12px", borderRadius: 12, background: C.bg, border: `1px solid ${C.border}`, marginBottom: 8, cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" } }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("div", { style: { color: C.text, fontWeight: 700, fontSize: 13 } }, s.ico, " ", s.name), /* @__PURE__ */ React.createElement("div", { style: { color: C.muted, fontSize: 11, marginTop: 2 } }, s.t, " \xB7 ", s.ins)), /* @__PURE__ */ React.createElement(Pill, { text: `\u0E27\u0E48\u0E32\u0E07 ${s.cap - s.bk.length}`, color: C.green, bg: C.gM })))), /* @__PURE__ */ React.createElement(Btn, { label: "\u0E1B\u0E34\u0E14", bg: C.surf, col: C.muted, onClick: onClose, full: true })), step === "info" && sel && /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("div", { style: { color: C.text, fontWeight: 800, fontSize: 18, marginBottom: 4 } }, "\u{1F4DD} \u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E02\u0E2D\u0E07\u0E04\u0E38\u0E13"), /* @__PURE__ */ React.createElement("div", { style: { color: C.orange, fontWeight: 700, fontSize: 13, marginBottom: 14 } }, sel.ico, " ", sel.name, " \xB7 ", sel.t), /* @__PURE__ */ React.createElement("input", { value: name, onChange: (e) => setName(e.target.value), placeholder: "\u0E0A\u0E37\u0E48\u0E2D-\u0E19\u0E32\u0E21\u0E2A\u0E01\u0E38\u0E25", style: inputStyle }), /* @__PURE__ */ React.createElement("input", { value: phone, onChange: (e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10)), placeholder: "\u0E40\u0E1A\u0E2D\u0E23\u0E4C\u0E42\u0E17\u0E23\u0E28\u0E31\u0E1E\u0E17\u0E4C", type: "tel", style: inputStyle }), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 10 } }, /* @__PURE__ */ React.createElement(Btn, { label: "\u2190 \u0E22\u0E49\u0E2D\u0E19\u0E01\u0E25\u0E31\u0E1A", bg: C.surf, col: C.muted, onClick: () => setStep("pick"), full: true }), /* @__PURE__ */ React.createElement(Btn, { label: "\u0E16\u0E31\u0E14\u0E44\u0E1B \u2192", bg: C.orange, onClick: () => { if (!name.trim() || !phone.trim()) { showToast("\u0E01\u0E23\u0E2D\u0E01\u0E0A\u0E37\u0E48\u0E2D\u0E41\u0E25\u0E30\u0E40\u0E1A\u0E2D\u0E23\u0E4C\u0E42\u0E17\u0E23\u0E43\u0E2B\u0E49\u0E04\u0E23\u0E1A", "err"); return; } setStep("pay"); }, full: true }))), step === "pay" && sel && /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("div", { style: { color: C.text, fontWeight: 800, fontSize: 18, marginBottom: 4, textAlign: "center" } }, "\u{1F4B3} \u0E0A\u0E33\u0E23\u0E30\u0E40\u0E07\u0E34\u0E19"), /* @__PURE__ */ React.createElement("div", { style: { color: C.muted, fontSize: 13, textAlign: "center", marginBottom: 14 } }, "\u0E22\u0E2D\u0E14: ", /* @__PURE__ */ React.createElement("strong", { style: { color: C.orange, fontSize: 18 } }, settings.guestPrice, " \u0E1A\u0E32\u0E17")), settings.guestQrImage ? /* @__PURE__ */ React.createElement("img", { src: settings.guestQrImage, alt: "QR", style: { width: "100%", maxWidth: 220, display: "block", margin: "0 auto 16px", background: "#fff", borderRadius: 12, padding: 10 } }) : /* @__PURE__ */ React.createElement("div", { style: { textAlign: "center", color: C.muted, fontSize: 12, marginBottom: 16, padding: 20, background: C.bg, borderRadius: 10 } }, "\u0E22\u0E31\u0E07\u0E44\u0E21\u0E48\u0E21\u0E35 QR \u2014 \u0E15\u0E34\u0E14\u0E15\u0E48\u0E2D staff \u0E40\u0E1E\u0E37\u0E48\u0E2D\u0E23\u0E31\u0E1A QR"), /* @__PURE__ */ React.createElement("div", { style: { marginBottom: 8 } }, /* @__PURE__ */ React.createElement("div", { style: { color: C.muted, fontSize: 12, fontWeight: 600, marginBottom: 6 } }, "\u0E2D\u0E31\u0E1B\u0E42\u0E2B\u0E25\u0E14\u0E2A\u0E25\u0E34\u0E1B\u0E42\u0E2D\u0E19\u0E40\u0E07\u0E34\u0E19"), slip && /* @__PURE__ */ React.createElement("img", { src: slip, alt: "slip", style: { width: 100, height: 100, objectFit: "cover", borderRadius: 10, marginBottom: 8 } }), /* @__PURE__ */ React.createElement("label", { style: { display: "block", textAlign: "center", padding: "11px 0", background: slipCompressing ? C.surf : C.bM, border: `1px solid ${slipCompressing ? C.border : C.blue}`, borderRadius: 10, color: slipCompressing ? C.muted : C.blue, fontWeight: 700, fontSize: 13, cursor: slipCompressing ? "default" : "pointer" } }, slipCompressing ? "\u23F3 \u0E01\u0E33\u0E25\u0E31\u0E07\u0E40\u0E15\u0E23\u0E35\u0E22\u0E21\u0E23\u0E39\u0E1B..." : slip ? "\u{1F4F7} \u0E40\u0E1B\u0E25\u0E35\u0E48\u0E22\u0E19\u0E2A\u0E25\u0E34\u0E1B" : "\u{1F4F7} \u0E40\u0E25\u0E37\u0E2D\u0E01\u0E23\u0E39\u0E1B\u0E2A\u0E25\u0E34\u0E1B", /* @__PURE__ */ React.createElement("input", { type: "file", accept: "image/*", disabled: slipCompressing, style: { display: "none" }, onChange: handleSlip }))), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 10, marginTop: 14 } }, /* @__PURE__ */ React.createElement(Btn, { label: "\u2190 \u0E22\u0E49\u0E2D\u0E19\u0E01\u0E25\u0E31\u0E1A", bg: C.surf, col: C.muted, onClick: () => setStep("info"), full: true, disabled: submitting }), /* @__PURE__ */ React.createElement(Btn, { label: submitting ? "\u23F3 \u0E01\u0E33\u0E25\u0E31\u0E07\u0E2A\u0E48\u0E07..." : "\u2713 \u0E2A\u0E48\u0E07\u0E2B\u0E25\u0E31\u0E01\u0E10\u0E32\u0E19", bg: C.green, onClick: handleSubmit, full: true, disabled: submitting || slipCompressing }))), step === "done" && /* @__PURE__ */ React.createElement("div", { style: { textAlign: "center" } }, /* @__PURE__ */ React.createElement("div", { style: { fontSize: 52, marginBottom: 10 } }, "\u2705"), /* @__PURE__ */ React.createElement("div", { style: { color: C.text, fontWeight: 800, fontSize: 18, marginBottom: 8 } }, "\u0E2A\u0E48\u0E07\u0E2B\u0E25\u0E31\u0E01\u0E10\u0E32\u0E19\u0E41\u0E25\u0E49\u0E27!"), /* @__PURE__ */ React.createElement("div", { style: { color: C.muted, fontSize: 13, lineHeight: 1.7, marginBottom: 20 } }, "\u0E23\u0E2D staff \u0E15\u0E23\u0E27\u0E08\u0E2A\u0E2D\u0E1A\u0E2A\u0E25\u0E34\u0E1B\u0E2A\u0E31\u0E01\u0E04\u0E23\u0E39\u2014\u0E2A\u0E2D\u0E07\u0E04\u0E23\u0E39", /* @__PURE__ */ React.createElement("br", null), "\u0E08\u0E30\u0E22\u0E37\u0E19\u0E22\u0E31\u0E19\u0E17\u0E35\u0E48\u0E2B\u0E19\u0E49\u0E32\u0E07\u0E32\u0E19\u0E40\u0E21\u0E37\u0E48\u0E2D\u0E21\u0E32\u0E16\u0E36\u0E07"), /* @__PURE__ */ React.createElement(Btn, { label: "\u0E40\u0E2A\u0E23\u0E47\u0E08\u0E2A\u0E34\u0E49\u0E19", bg: C.orange, onClick: onClose, full: true })));
 }
 function App() {
+  // บังคับล้างแคชให้ลูกค้าทุกคนดึงข้อมูลพร้อมกัน
+  React.useEffect(() => {
+    if(localStorage.getItem('apex_master_sync') !== 'v1') {
+      localStorage.clear();
+      localStorage.setItem('apex_master_sync', 'v1');
+      window.location.reload();
+    }
+  }, []);
+
   /* บังคับล้างแคช */ React.useEffect(() => { if(localStorage.getItem('apex_v3') !== 'true') { localStorage.clear(); localStorage.setItem('apex_v3', 'true'); window.location.reload(); } }, []);
 
   const [C2, dark, toggleTheme] = useTheme();
@@ -2890,25 +2899,23 @@ function App() {
               var _sessionMap = {};
               
               _sd.sessions.forEach(function(s){
-                var cls = _clsMap[String(s.classId||"")]; if (!cls) return;
-                var sDate = s.date ? String(s.date).split("T")[0] : "";
-                if (!sDate || sDate.length !== 10) return;
-                var targetSid = cls.id + "_" + sDate;
-                
-                var _bk = healIds(s.bookings);{return x.length >= 5;});
-                var _bkFixed=[]; _bk.forEach(function(mid){if(/^\d{15,}$/.test(mid)){var h=Math.floor(mid.length/2);_bkFixed.push(mid.slice(0,h));_bkFixed.push(mid.slice(h));}else{_bkFixed.push(mid);}}); _bk=_bkFixed;
-                var _wl = healIds(s.waitlist);{return x.length >= 5;});
-                var _t  = s.timeOverride || cls.t;
-                
-                _sessionMap[targetSid] = {
-                  id: targetSid, cid: cls.id, name: cls.name, ins: cls.ins,
-                  date: sDate, t: _t, dur: cls.dur, cap: cls.cap, wlCap: cls.wlCap,
-                  col: cls.col, dim: _DIM[cls.col]||"#1a0a00", ico: cls.ico,
-                  bk: _bk, wl: _wl, att: {}
-                };
-              });
+            var cls = _clsMap[String(s.classId||"")]; if (!cls) return;
+            var sDate = s.date ? String(s.date).split("T")[0] : String(s.date||"").replace(/T.*/,"").slice(0,10);
+            if (!sDate || sDate.length !== 10) return;
+            var targetSid = cls.id + "_" + sDate;
+            var _bk = typeof healIds === 'function' ? healIds(s.bookings) : (s.bookings ? String(s.bookings).split(",").map(x=>x.trim()).filter(Boolean) : []);
+            var _wl = typeof healIds === 'function' ? healIds(s.waitlist) : (s.waitlist ? String(s.waitlist).split(",").map(x=>x.trim()).filter(Boolean) : []);
+            var _t  = s.timeOverride || cls.t;
+            
+            _sessionMap[targetSid] = {
+              id: targetSid, cid: cls.id, name: cls.name, ins: cls.ins,
+              date: sDate, t: _t, dur: cls.dur, cap: cls.cap, wlCap: cls.wlCap,
+              col: cls.col, dim: _DIM[cls.col]||"#1a0a00", ico: cls.ico,
+              bk: _bk, wl: _wl, att: {}
+            };
+          });
 
-              if (_sd.bookings && Array.isArray(_sd.bookings)) {
+          if (_sd.bookings && Array.isArray(_sd.bookings)) {
                 _sd.bookings.forEach(function(bkRow) {
                   var sid = String(bkRow.sessionId||"").trim();
                   var mid = String(bkRow.memberId||"").trim();
@@ -3437,124 +3444,29 @@ function App() {
     setStaffPinSaving(false);
   }, [staffPinForm, auth, postAction, showToast]);
 
-  // ── Admin real-time polling (Short Poll ทุก 30 วิ) ────────────────
-  useEffect(() => {
+  
+
+  
+  // ── Admin real-time polling (Real-time Sync & Anti-Memory Leak) ──
+  React.useEffect(() => {
     if (!isAdmin || !APPS_SCRIPT_URL) return;
-    const _sd = document.getElementById("apex-sync-dot");
+    let isMounted = true;
     const _poll = async () => {
-      if (_sd) _sd.style.display = "flex";
       try {
-        const _r = await fetch(APPS_SCRIPT_URL + "?action=getAll", { signal: AbortSignal.timeout(30000) });
+        const _r = await fetch(APPS_SCRIPT_URL + "?action=getAll", { signal: AbortSignal.timeout(20000) });
         const _d = await _r.json();
-        if (_d) {
-          if (_d.members && _d.members.length > 0) {
-            setMembers(_d.members.map(function(m) {
-              return {
-                id: String(m.id || ""), name: String(m.name || ""), phone: String(m.phone || ""),
-                pin: String(m.pin || "1234"), lineId: String(m.lineId || ""),
-                membershipType: String(m.membershipType || "monthly"),
-                membershipExpiry: m.membershipExpiry ? String(m.membershipExpiry).replace(/T.*/, "") : "",
-                sessionsLeft: m.sessionsLeft !== "" && m.sessionsLeft !== null ? Number(m.sessionsLeft) || 0 : null,
-                noShowCount: Number(m.noShowCount) || 0,
-                suspended: m.suspended === true || String(m.suspended).toUpperCase() === "TRUE",
-                suspendedUntil: m.suspendedUntil ? String(m.suspendedUntil).replace(/T.*/, "") : null,
-                deviceId: m.deviceId ? String(m.deviceId) : null,
-                joinDate: m.joinDate ? String(m.joinDate).replace(/T.*/, "") : "",
-                photoUrl: m.photoUrl ? String(m.photoUrl) : "",
-                lineUserId: m.lineUserId ? String(m.lineUserId) : "",
-                noShowDates: m.noShowDates ? String(m.noShowDates) : "",
-                penaltyLevel: m.penaltyLevel !== undefined && m.penaltyLevel !== "" ? Number(m.penaltyLevel) : 0,
-                wlOptIn: m.wlOptIn === true || String(m.wlOptIn).toUpperCase() === "TRUE",
-              };
-            }));
-            await store.set("apex_members", _d.members);
-          }
-          if (_d.guestBookings) { setGuestBookings(_d.guestBookings); await store.set("apex_guest_bookings", _d.guestBookings); }
-          if (_d.staff && Array.isArray(_d.staff)) { setStaff(_d.staff); }
-          if (_d.etiquetteRules && Array.isArray(_d.etiquetteRules) && _d.etiquetteRules.length > 0) { setEtiquetteRules(_d.etiquetteRules); }
-          if (_d.feedback) { setFeedback(_d.feedback); await store.set("apex_feedback", _d.feedback); }
-          if (_d.notifications) { setNotifications(_d.notifications); await store.set("apex_notifs", _d.notifications); }
-          
-          if (_d.sessions && _d.classes && _d.classes.length > 0) {
-            var _pClsMap = {};
-            _d.classes.forEach(function(c) {
-              var col = String(c.color || "#F97316");
-              _pClsMap[String(c.id || "")] = {
-                id: String(c.id || ""), name: String(c.name || ""), ins: String(c.instructor || ""),
-                t: String(c.time || "08:00").replace(/T(\d{2}):(\d{2}).*/, (_, h, m) => (((parseInt(h) + 7) % 24) < 10 ? "0" : "") + ((parseInt(h) + 7) % 24) + ":" + m).slice(0, 5),
-                dur: parseInt(c.duration) || 60, cap: parseInt(c.capacity) || 12,
-                wlCap: parseInt(c.waitlistCap) || 8, col: col, ico: String(c.icon || "🏋️")
-              };
-            });
-            var _pDIM = { "#F97316": "#431407", "#22C55E": "#052e16", "#EF4444": "#450a0a", "#A855F7": "#2e1065", "#F59E0B": "#451a03", "#10B981": "#022c22", "#3B82F6": "#172554", "#06B6D4": "#083344" };
-            
-            var _freshSessions = buildSessions(_d.classes.map(function(c) {
-              var col = String(c.color || "#F97316");
-              return { id: c.id, name: c.name, ins: c.instructor || c.ins, t: String(c.time || "08:00").slice(0, 5), dur: parseInt(c.duration) || 60, cap: parseInt(c.capacity) || 12, wl: parseInt(c.waitlistCap) || 8, col: col, dim: _pDIM[col] || "#1a0a00", ico: c.icon || "🏋️", active: true, days: String(c.days || "").split(",").map(Number) };
-            }));
-
-            _d.sessions.forEach(function(s) {
-              var cls = _pClsMap[String(s.classId || "")]; if (!cls) return;
-              var sDate = String(s.date || "").replace(/T.*/, "").slice(0, 10);
-              if (!sDate || sDate.length !== 10) return;
-              var targetSid = cls.id + "_" + sDate;
-              
-              var _bk = String(s.bookings || "").split(",").map(function(x) { return x.trim(); }).filter(Boolean);
-              var _bkFixed = []; _bk.forEach(function(mid) { if (/^\d{15,}$/.test(mid)) { var h = Math.floor(mid.length / 2); _bkFixed.push(mid.slice(0, h)); _bkFixed.push(mid.slice(h)); } else { _bkFixed.push(mid); } }); _bk = _bkFixed;
-              var _wl = String(s.waitlist || "").split(",").filter(Boolean).map(function(x) { return x.trim(); });
-              var _t = s.timeOverride || cls.t;
-
-              _freshSessions[targetSid] = {
-                id: targetSid, cid: cls.id, name: cls.name, ins: cls.ins,
-                date: sDate, t: _t, dur: cls.dur, cap: cls.cap, wlCap: cls.wlCap,
-                col: cls.col, dim: _pDIM[cls.col] || "#1a0a00", ico: cls.ico,
-                bk: _bk, wl: _wl, att: {}
-              };
-            });
-
-            if (_d.bookings && Array.isArray(_d.bookings)) {
-              _d.bookings.forEach(function(bkRow) {
-                var sid = String(bkRow.sessionId || "").trim();
-                var mid = String(bkRow.memberId || "").trim();
-                if (_freshSessions[sid]) {
-                  var type = String(bkRow.type || "main").trim();
-                  if (type === "main" || type === "") {
-                    if (_freshSessions[sid].bk.indexOf(mid) === -1) _freshSessions[sid].bk.push(mid);
-                  } else if (type === "waitlist") {
-                    if (_freshSessions[sid].wl.indexOf(mid) === -1) _freshSessions[sid].wl.push(mid);
-                  }
-                }
-              });
-            }
-
-            var _pollAtt = {};
-            if (_d.attendance && Array.isArray(_d.attendance)) {
-              _d.attendance.forEach(function(a) {
-                var sid = String(a.sessionId || "").trim();
-                var mid = String(a.memberId || "").trim();
-                if (sid && mid && a.status) {
-                  if (!_pollAtt[sid]) _pollAtt[sid] = {};
-                  _pollAtt[sid][mid] = String(a.status);
-                }
-              });
-            }
-
-            Object.keys(_freshSessions).forEach(function(sid) {
-              _freshSessions[sid].att = _pollAtt[sid] || {};
-            });
-
-            setSessions(_freshSessions);
-            await store.set("apex_sessions", _freshSessions);
-          }
+        if (_d && isMounted) {
+          if (_d.members) { setMembers(_d.members); store.set("apex_members", _d.members); }
+          if (_d.sessions) { setSessions(buildSessions(_d.classes || [])); store.set("apex_sessions", _d.sessions); }
+          if (_d.guestBookings) { setGuestBookings(_d.guestBookings); store.set("apex_guest_bookings", _d.guestBookings); }
         }
-      } catch (e) { console.log("Polling error:", e); }
-      if (_sd) _sd.style.display = "none";
+      } catch (e) { console.log("Polling Sync:", e); }
     };
-    const _tid = setInterval(_poll, 30000);
-    return () => { clearInterval(_tid); if (_sd) _sd.style.display = "none"; };
+    const _tid = setInterval(_poll, 15000); // ปรับให้อัปเดตไวขึ้นทุก 15 วินาที
+    return () => { isMounted = false; clearInterval(_tid); };
   }, [isAdmin]);
 
-  const unreadCount = useMemo(() => cur ? (notifications || []).filter((n) => n.mid === cur.id && !n.read).length : 0, [notifications, cur]);
+const unreadCount = useMemo(() => cur ? (notifications || []).filter((n) => n.mid === cur.id && !n.read).length : 0, [notifications, cur]);
   const pendingGuestCount = useMemo(() => (guestBookings || []).filter((g) => g.status === "pending").length, [guestBookings]);
   const openFeedbackCount = useMemo(() => (feedback || []).filter((f) => f.status === "open").length, [feedback]);
   const expiringCount = useMemo(() => {
