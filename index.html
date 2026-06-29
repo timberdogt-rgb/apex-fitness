@@ -2761,7 +2761,7 @@ function GuestBookingFlow({ sessions, settings, onSubmit, onClose, showToast }) 
 }
 function App() {
   const [C2, dark, toggleTheme] = useTheme();
-  const [lang, setLang] = useState(() => localStorage.getItem("apex_lang") || "th");
+  const [lang, setLang] = React.useState(() => localStorage.getItem("apex_lang") || "th");
   const t = (key) => (TRANSLATIONS[lang] && TRANSLATIONS[lang][key]) || TRANSLATIONS["th"][key] || key;
   const [loading, setLoading] = useState(true);
   const [deviceId, setDeviceId] = useState(null);
