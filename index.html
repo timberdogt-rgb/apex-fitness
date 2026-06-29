@@ -684,7 +684,7 @@ body.apex-light {
         myBkTitle:"การจองของฉัน", upcoming:"กำลังจะมา", past:"ผ่านไปแล้ว",
         attended:"เข้าร่วมแล้ว", absent:"ไม่ได้เข้า", checkedIn:"เช็คอินแล้ว",
         cancelBtnShort:"ยกเลิก", checkInBtn:"เช็คอิน →",
-        wlConfirmTitle:_t("wlConfirmTitle"), wlConfirmMsg:"ยืนยันรับที่นั่งภายใน",
+        wlConfirmTitle:"🎉 มีที่ว่างสำหรับคุณ!", wlConfirmMsg:"ยืนยันรับที่นั่งภายใน",
         wlConfirmMin:"นาที", wlAccept:"✓ รับที่นั่ง", wlDecline:"ไม่รับ",
       },
       en: {
@@ -3646,4 +3646,4 @@ const unreadCount = useMemo(() => cur ? (notifications || []).filter((n) => n.mi
         const key = ["cur","new1","new2"][i];
         return React.createElement("div", { key: lb, style: { marginBottom: 14 } },
           React.createElement("div", { style: { color: C2.muted, fontSize: 12, fontWeight: 600, marginBottom: 5 } }, lb),
-          React.createElement("input", { type: "password", value: staffPinForm[key], onChange: (e) => setStaffPinForm(p => Object.assign({}, p, { [key]: e.target.value })), style: { width: "100%", padding: "11px 12px", background: C2.bg, border: "1px solid " + C2.border, borderRadius: 9, color: C2.text, fontSize: 14, fontFamily: FONT, boxSizing: "border-box", outline: "no
+          React.createElement("input", { type: "password", value: staffPinForm[key], onChange: (e) => setStaffPinForm(p => Object.assign({}, p, { [key]: e.target.value })), style: { width: "100%", padding: "11px 12px", background: C2.bg, border: "1px solid " + C2.border, borderRadius: 9, color: C2.text, fontSize: 14, fontFamily: F
