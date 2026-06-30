@@ -3069,7 +3069,16 @@ function App() {
               
               _sd.sessions.forEach(function(s){
             var cls = _clsMap[String(s.classId||"")]; if (!cls) return;
-            var sDate = s.date ? String(s.date).split("T")[0] : String(s.date||"").replace(/T.*/,"").slice(0,10);
+            // [FIX] Sheets serializes dates as UTC ISO — shift +7h to get Bangkok local date
+            // e.g. "2026-06-29T17:00:00.000Z" (17:00 UTC) = midnight Bangkok = June 30 local
+            var sDate;
+            if (s.date) {
+              var _dv = new Date(s.date);
+              if (!isNaN(_dv.getTime())) {
+                var _bkk = new Date(_dv.getTime() + 7 * 3600 * 1000);
+                sDate = _bkk.toISOString().split("T")[0];
+              } else { sDate = String(s.date).replace(/T.*/,"").slice(0,10); }
+            } else { sDate = ""; }
             if (!sDate || sDate.length !== 10) return;
             var targetSid = cls.id + "_" + sDate;
             var _bk = typeof healIds === 'function' ? healIds(s.bookings) : (s.bookings ? String(s.bookings).split(",").map(x=>x.trim()).filter(Boolean) : []);
