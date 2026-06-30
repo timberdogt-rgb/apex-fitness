@@ -3077,9 +3077,11 @@ function App() {
             var _t  = s.timeOverride || cls.t;
             
             if (_sessionMap[targetSid]) {
-              // Merge: prefer non-empty bk/wl (prevents duplicate-row overwrite)
-              if (_bk.length > 0) _sessionMap[targetSid].bk = _bk;
-              if (_wl.length > 0) _sessionMap[targetSid].wl = _wl;
+              // Merge: UNION both lists — captures bookings split across duplicate rows
+              // (race condition creates duplicate empty rows; union is always safe because
+              //  cancellations are reflected in-place on the same row, not via a new row)
+              _bk.forEach(function(id){ if (_sessionMap[targetSid].bk.indexOf(id) === -1) _sessionMap[targetSid].bk.push(id); });
+              _wl.forEach(function(id){ if (_sessionMap[targetSid].wl.indexOf(id) === -1) _sessionMap[targetSid].wl.push(id); });
             } else {
               _sessionMap[targetSid] = {
                 id: targetSid, cid: cls.id, name: cls.name, ins: cls.ins,
@@ -3762,14 +3764,4 @@ const unreadCount = useMemo(() => cur ? (notifications || []).filter((n) => n.mi
         /* @__PURE__ */ React.createElement("span", { dangerouslySetInnerHTML: { __html: n.ic }, style: { width: 22, height: 22, display: "flex", alignItems: "center", justifyContent: "center" } }),
         n.badge > 0 && /* @__PURE__ */ React.createElement("span", { style: { position: "absolute", top: -4, right: -8, background: C2.red, color: "#fff", fontSize: 9, fontWeight: 800, minWidth: 16, height: 16, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 3px" } }, n.badge)
       ),
-      view === n.id && /* @__PURE__ */ React.createElement("span", { style: { fontSize: 10, fontWeight: 800, marginTop: 1, whiteSpace: "nowrap" } }, t(n.id))
-    ))));
-}
-ReactDOM.createRoot(document.getElementById("root")).render(/* @__PURE__ */ React.createElement(App));
-requestAnimationFrame(() => requestAnimationFrame(() => {
-  const _s = document.getElementById("splash");
-  if (_s) _s.classList.add("hidden");
-}));
-  </script>
-</body>
-</html>
+      view === n.id && /* @__PURE__ */ React.createElement("span", { style: { fontSize: 10, fontWeight: 800, marginTop: 1, whiteSpa
