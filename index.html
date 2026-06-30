@@ -679,7 +679,7 @@ body.apex-light {
         wlInfo:"เมื่อมีคนยกเลิก ระบบจะแจ้งเตือนและเลื่อนที่นั่งให้อัตโนมัติ",
   noBookings:"ยังไม่มีการจอง", noClassToday:"ไม่มีคลาสที่จองวันนี้",
   noNotifs:"ยังไม่มีการแจ้งเตือน", wlNotifInfo:"เมื่อมีที่ว่างจากรายการสำรอง จะแจ้งที่นี่",
-  wlToggle:"🔔 รับที่ว่างนาทีสุดท้าย", wlToggleInfo:"เมื่อมีคนยกเลิกก่อนคลาส ระบบจะแจ้งเตือนคุณอัตโนมัติ",
+  wlToggle:_t("wlToggle"), wlToggleInfo:"เมื่อมีคนยกเลิกก่อนคลาส ระบบจะแจ้งเตือนคุณอัตโนมัติ",
   suggestTab:"💡 ข้อเสนอแนะ", reportTab:"⚠️ แจ้งปัญหา",
   sendMsg:"ส่งข้อความ", msgPlaceholder:"พิมพ์ข้อความของคุณที่นี่...",
   msgHistory:"ประวัติของคุณ", noMessages:"ยังไม่เคยส่งข้อความ",
@@ -3076,38 +3076,18 @@ function App() {
             var _wl = typeof healIds === 'function' ? healIds(s.waitlist) : (s.waitlist ? String(s.waitlist).split(",").map(x=>x.trim()).filter(Boolean) : []);
             var _t  = s.timeOverride || cls.t;
             
-            if (_sessionMap[targetSid]) {
-              // Merge: UNION both lists — captures bookings split across duplicate rows
-              // (race condition creates duplicate empty rows; union is always safe because
-              //  cancellations are reflected in-place on the same row, not via a new row)
-              _bk.forEach(function(id){ if (_sessionMap[targetSid].bk.indexOf(id) === -1) _sessionMap[targetSid].bk.push(id); });
-              _wl.forEach(function(id){ if (_sessionMap[targetSid].wl.indexOf(id) === -1) _sessionMap[targetSid].wl.push(id); });
-            } else {
-              _sessionMap[targetSid] = {
-                id: targetSid, cid: cls.id, name: cls.name, ins: cls.ins,
-                date: sDate, t: _t, dur: cls.dur, cap: cls.cap, wlCap: cls.wlCap,
-                col: cls.col, dim: _DIM[cls.col]||"#1a0a00", ico: cls.ico,
-                bk: _bk, wl: _wl, att: {}
-              };
-            }
+            _sessionMap[targetSid] = {
+              id: targetSid, cid: cls.id, name: cls.name, ins: cls.ins,
+              date: sDate, t: _t, dur: cls.dur, cap: cls.cap, wlCap: cls.wlCap,
+              col: cls.col, dim: _DIM[cls.col]||"#1a0a00", ico: cls.ico,
+              bk: _bk, wl: _wl, att: {}
+            };
           });
 
           if (_sd.bookings && Array.isArray(_sd.bookings)) {
                 _sd.bookings.forEach(function(bkRow) {
                   var sid = String(bkRow.sessionId||"").trim();
                   var mid = String(bkRow.memberId||"").trim();
-                  if (!sid || !mid) return;
-                  // [FIX] If session not in map yet, reconstruct from sid + classes data
-                  if (!_sessionMap[sid] && _clsMap) {
-                    var _sp = sid.split("_");
-                    var _scid = _sp[0], _sdate = _sp.slice(1).join("_");
-                    var _scls = _clsMap[_scid];
-                    if (_scls && _sdate && _sdate.length === 10) {
-                      _sessionMap[sid] = { id: sid, cid: _scls.id, name: _scls.name, ins: _scls.ins,
-                        date: _sdate, t: _scls.t, dur: _scls.dur, cap: _scls.cap, wlCap: _scls.wlCap,
-                        col: _scls.col, dim: _DIM[_scls.col]||"#1a0a00", ico: _scls.ico, bk: [], wl: [], att: {} };
-                    }
-                  }
                   if (_sessionMap[sid]) {
                     var type = String(bkRow.type||"main").trim();
                     if (type === "main" || type === "") {
