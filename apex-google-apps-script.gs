@@ -50,6 +50,7 @@ var SHEETS = {
   FEEDBACK:       "Feedback",
   STAFF:          "Staff",
   ETIQUETTE:      "Etiquette",
+  CHECKIN_LOG:    "CheckinLog",  // [v4.3] บันทึกเช็คอิน + no-show + แจ้งเตือน
 };
 
 // ════════════════════════════════════════════════════════
@@ -246,6 +247,7 @@ function setupSheets() {
   defs[SHEETS.APPDATA]        = ["key","value"];
   defs[SHEETS.GUEST_BOOKINGS] = ["id","name","phone","sessionId","className","classDate","classTime","amount","slipUrl","status","createdAt","confirmedBy","confirmedAt"];
   defs[SHEETS.FEEDBACK]       = ["id","memberId","memberName","type","message","status","createdAt","response","respondedAt"];
+  defs[SHEETS.CHECKIN_LOG]   = ["id","type","sessionId","className","classTime","classDate","memberId","memberName","markedAt","notifiedViaLine"];
 
   Object.keys(defs).forEach(function(name) {
     var sh = ss.getSheetByName(name);
@@ -358,6 +360,30 @@ function fixClassSchedule() {
 // ════════════════════════════════════════════════════════
 // 📅 สร้าง Sessions 14 วัน
 // ════════════════════════════════════════════════════════
+// ── Run once to fix existing Sessions sheet: heal corrupted bookings/waitlist values ──
+function fixSessionsTextFormat() {
+  var sh   = getSheet(SHEETS.SESSIONS);
+  var data = sh.getDataRange().getValues();
+  var fixed = 0;
+  for (var i = 1; i < data.length; i++) {
+    var bkRaw = String(data[i][3] || "");
+    var wlRaw = String(data[i][4] || "");
+    var bkList = parseList(bkRaw);
+    var wlList = parseList(wlRaw);
+    // If parseList returned different result than raw (healing happened), rewrite as text
+    if (bkList.join(",") !== bkRaw || wlList.join(",") !== wlRaw || bkRaw.indexOf(",") > -1 || wlRaw.indexOf(",") > -1) {
+      sh.getRange(i + 1, 4, 1, 2).setNumberFormat("@");
+      sh.getRange(i + 1, 4).setValue(bkList.join(","));
+      sh.getRange(i + 1, 5).setValue(wlList.join(","));
+      fixed++;
+    }
+  }
+  // Also set entire columns 4-5 to text format going forward
+  sh.getRange(2, 4, Math.max(sh.getLastRow() - 1, 1000), 2).setNumberFormat("@");
+  Logger.log("fixSessionsTextFormat: fixed " + fixed + " rows");
+  return { ok: true, fixed: fixed };
+}
+
 function generateSessionsForNext14Days() {
   var classes = readSheet(SHEETS.CLASSES).filter(function(c){
     return c.active === true || String(c.active).toUpperCase() === "TRUE";
@@ -378,6 +404,10 @@ function generateSessionsForNext14Days() {
       var sid = c.id + "_" + ds;
       if (existing.indexOf(sid) !== -1) return;
       sh.appendRow([sid, c.id, ds, "", ""]);
+      // Force text format on bookings (col 4) and waitlist (col 5) immediately
+      // so Sheets never auto-converts comma-separated IDs to numbers
+      var newRow = sh.getLastRow();
+      sh.getRange(newRow, 4, 1, 2).setNumberFormat("@");
       existing.push(sid);
       added++;
     });
@@ -395,6 +425,7 @@ function doGet(e) {
     if (action === "getData")          return json(handleGetData(e.parameter.key));
     if (action === "login")            return json(handleLogin(e.parameter.phone, e.parameter.pin, e.parameter.deviceId));
     if (action === "getSessionBookings") return json(handleGetSessionBookings(e.parameter.sessionId));  // ✅ [v4.2]
+    if (action === "getCheckinLog")      return json({ ok:true, logs: getCheckinLogRecent() });          // ✅ [v4.3]
     return json({ error: "Unknown GET action: " + action });
   } catch(err) { return json({ error: err.toString() }); }
 }
@@ -431,6 +462,10 @@ function doPost(e) {
     if (action === "toggleWlOptIn")         return json(handleToggleWlOptIn(data));
     if (action === "rescheduleSession")     return json(handleRescheduleSession(data));  // ✅ [v4.4]
     if (action === "setupReminderTrigger")  return json(handleSetupReminderTrigger(data));  // ✅ [v4.4]
+    if (action === "confirmWaitlistSpot")   return json(handleConfirmWaitlistSpot(data));   // ✅ Phase 3
+    if (action === "declineWaitlistSpot")   return json(handleDeclineWaitlistSpot(data));   // ✅ Phase 3
+    if (action === "updateMemberPhone")     return json(handleUpdateMemberPhone(data));     // ✅ Admin แก้เบอร์
+    if (action === "lineReportSummary")     { sendDailyAdminSummary(); return json({ok:true}); } // ✅ Reports
     return json({ error: "Unknown POST action: " + action });
   } catch(err) { return json({ error: err.toString() }); }
 }
@@ -486,7 +521,14 @@ function getAllData() {
   return {
     members:       readSheet(SHEETS.MEMBERS),
     classes:       classes,
-    sessions:      readSheet(SHEETS.SESSIONS),
+    sessions:      readSheet(SHEETS.SESSIONS).map(function(s) {
+      // date cells from getValues() are Date objects (UTC) — format as Bangkok local date string
+      // so frontend can build correct session IDs (e.g. "c5_2026-06-30" not "c5_2026-06-29")
+      if (s.date instanceof Date) {
+        s.date = Utilities.formatDate(s.date, "GMT+7", "yyyy-MM-dd");
+      }
+      return s;
+    }),
     bookings:      readSheet(SHEETS.BOOKINGS),
     attendance:    readSheet(SHEETS.ATTENDANCE),
     notifications: readSheet(SHEETS.NOTIFICATIONS).map(function(n) {
@@ -506,6 +548,7 @@ function getAllData() {
     feedback:      readSheet(SHEETS.FEEDBACK),
     staff:         readStaffList(),
     etiquetteRules: readEtiquetteRules(),
+    checkinLog:    getCheckinLogRecent(),  // [v4.3] ย้อนหลัง 7 วัน
   };
 }
 
@@ -845,9 +888,16 @@ function withLock(fn) {
 // 🕐 BOOKING WINDOW + CANCEL POLICY HELPERS
 // ════════════════════════════════════════════════════════
 function getSessionDateTime(dateStr, timeStr) {
+  // Sheets getValues() returns Date objects, not strings — must convert first
+  var ds;
+  if (dateStr instanceof Date) {
+    ds = Utilities.formatDate(dateStr, "GMT+7", "yyyy-MM-dd");
+  } else {
+    ds = String(dateStr).substring(0, 10); // take "yyyy-MM-dd" part only
+  }
   var t = formatTimeValue(timeStr);
   var parts = t.split(":");
-  var d = new Date(dateStr + "T00:00:00+07:00");
+  var d = new Date(ds + "T00:00:00+07:00");
   d.setHours(parseInt(parts[0]), parseInt(parts[1]), 0, 0);
   return d;
 }
@@ -868,7 +918,24 @@ function checkBookingWindow(sessionDate, classTime) {
 // ════════════════════════════════════════════════════════
 // 🎫 BOOKING
 // ════════════════════════════════════════════════════════
-function parseList(str) { return str ? String(str).split(",").filter(Boolean) : []; }
+function parseList(str) {
+  if (!str) return [];
+  var p = String(str).split(",").map(function(x){ return x.trim(); }).filter(Boolean);
+  // Heal Google Sheets number-format corruption:
+  // "923,985,959,869,327,000" (Sheets auto-commas) → reconstruct ["923985959","869327000"]
+  if (p.length > 2 &&
+      p.every(function(x){ return /^\d+$/.test(x); }) &&
+      p.slice(1).every(function(x){ return x.length === 3; })) {
+    var g = p.join("");
+    var chunks = [];
+    for (var i = 0; i < g.length; i += 9) {
+      var chunk = g.slice(i, i + 9);
+      if (chunk.length >= 5) chunks.push(chunk);
+    }
+    return chunks.length > 0 ? chunks : p;
+  }
+  return p;
+}
 // Force text format on a Sheets cell before setValue — prevents Numbers columns from
 // treating comma-separated IDs as thousands separators (e.g. "858634748,815319110" → 8.58e+26)
 function setTextValue(sh, row, col, val) {
@@ -937,7 +1004,7 @@ function handleBook(d) {
     return { ok:true };
   });
 }
-function handleJoinWaitlist_v1(d) {
+function handleJoinWaitlist(d) {
   return withLock(function() {
     var found = findSessionRow(d.sessionId); if (!found) return { ok:false, error:"ไม่พบคลาส" };
     var cls = readSheet(SHEETS.CLASSES).filter(function(c){ return c.id === found.data[1]; })[0];
@@ -1148,6 +1215,125 @@ function handleResolveFeedback(d) {
 }
 
 // ════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════
+// 📋 [v4.3] CHECKIN LOG — บันทึกเช็คอิน/no-show + แจ้งเตือน Admin
+// ════════════════════════════════════════════════════════
+
+// ดึงข้อมูลคลาสจาก sessionId (format: classId_YYYY-MM-DD)
+function getClassInfoFromSession(sid) {
+  var m = String(sid||"").match(/^(.+)_(\d{4}-\d{2}-\d{2})$/);
+  if (!m) return { classId:"", name:sid, time:"", date:"" };
+  var classId = m[1], date = m[2];
+  var classes = readSheet(SHEETS.CLASSES);
+  var cls = null;
+  for (var i=0; i<classes.length; i++) { if (String(classes[i].id)===classId) { cls=classes[i]; break; } }
+  return { classId:classId, name: cls?cls.name:classId, time: cls?cls.time:"", date:date };
+}
+
+// บันทึกเหตุการณ์เช็คอิน / no-show ลง CheckinLog sheet
+function logCheckinEvent(type, sid, className, classTime, classDate, memberId, memberName, notifiedLine) {
+  try {
+    var sh = getSheet(SHEETS.CHECKIN_LOG);
+    var id = "CL" + new Date().getTime() + Math.floor(Math.random()*1000);
+    var now = Utilities.formatDate(new Date(), "GMT+7", "yyyy-MM-dd'T'HH:mm:ss");
+    sh.appendRow([id, type, sid, className||"", classTime||"", classDate||"", memberId||"", memberName||"", now, notifiedLine?"TRUE":"FALSE"]);
+  } catch(e) { Logger.log("logCheckinEvent error: "+e); }
+}
+
+// ดึง CheckinLog ย้อนหลัง 7 วัน
+function getCheckinLogRecent() {
+  try {
+    var bkk7 = new Date(new Date().getTime() + 7*3600*1000);
+    var cutoff = new Date(bkk7.getTime() - 7*86400*1000).toISOString().slice(0,10);
+    var rows = readSheet(SHEETS.CHECKIN_LOG);
+    return rows.filter(function(r){ return String(r.markedAt||"").slice(0,10) >= cutoff; })
+               .sort(function(a,b){ return String(b.markedAt).localeCompare(String(a.markedAt)); })
+               .slice(0,200);
+  } catch(e) { return []; }
+}
+
+// ════════════════════════════════════════════════════════
+// ⏰ [v4.3] NO-SHOW TRIGGER — รันทุก 15 นาที ตรวจคลาสที่เริ่ม +15 นาที
+// ════════════════════════════════════════════════════════
+
+// ตั้ง trigger อัตโนมัติ — รันฟังก์ชันนี้ครั้งเดียวจาก GAS editor
+function setupCheckinLogTrigger() {
+  // ลบ trigger เก่าของ checkNoShows
+  ScriptApp.getProjectTriggers().forEach(function(t) {
+    if (t.getHandlerFunction() === "checkNoShows") ScriptApp.deleteTrigger(t);
+  });
+  ScriptApp.newTrigger("checkNoShows").timeBased().everyMinutes(15).create();
+  Logger.log("✅ checkNoShows trigger ตั้งแล้ว (ทุก 15 นาที)");
+}
+
+// ฟังก์ชันหลัก — ถูกเรียกทุก 15 นาทีจาก trigger
+function checkNoShows() {
+  try {
+    var now = new Date(new Date().getTime() + 7*3600*1000); // Bangkok time
+    var todayStr = Utilities.formatDate(now, "GMT+7", "yyyy-MM-dd");
+    var nowMin = now.getHours()*60 + now.getMinutes();
+
+    var classes  = readSheet(SHEETS.CLASSES).filter(function(c){ return c.active!=="FALSE"&&c.active!==false; });
+    var bookings = readSheet(SHEETS.BOOKINGS);
+    var attRows  = readSheet(SHEETS.ATTENDANCE);
+    var members  = readSheet(SHEETS.MEMBERS);
+    var clLog    = readSheet(SHEETS.CHECKIN_LOG);
+
+    // index: sessionId → true (already notified no-show)
+    var alreadyChecked = {};
+    clLog.forEach(function(r){ if(r.type==="noshow_alert") alreadyChecked[r.sessionId]=true; });
+
+    classes.forEach(function(cls) {
+      if (!cls.time) return;
+      var parts = cls.time.match(/^(\d{1,2}):(\d{2})/);
+      if (!parts) return;
+      var classMin = parseInt(parts[1])*60 + parseInt(parts[2]);
+      var diffMin  = nowMin - classMin;
+      // เฉพาะคลาสที่เริ่มไป 10-25 นาทีแล้ว (window ±7.5 min รอบ 15 min mark)
+      if (diffMin < 10 || diffMin > 25) return;
+
+      var sid = cls.id + "_" + todayStr;
+      if (alreadyChecked[sid]) return; // แจ้งแล้ว ข้าม
+
+      // หาสมาชิกที่จองแต่ยังไม่เช็คอิน
+      var booked = bookings.filter(function(b){ return b.sessionId===sid && (b.type==="main"||!b.type); });
+      if (booked.length === 0) return;
+
+      var attPresent = {};
+      attRows.forEach(function(a){ if(a.sessionId===sid && a.status==="present") attPresent[a.memberId]=true; });
+
+      var noShows = booked.filter(function(b){ return !attPresent[b.memberId]; });
+      if (noShows.length === 0) return;
+
+      // สร้างรายชื่อ
+      var names = noShows.map(function(b){
+        var m = null;
+        for(var i=0;i<members.length;i++){ if(members[i].id===b.memberId){m=members[i];break;} }
+        return m ? m.name : b.memberId;
+      });
+
+      var msg = "⏰ ยังไม่เช็คอิน (" + cls.time + " " + cls.name + ")\n" +
+                "📋 " + noShows.length + " คน: " + names.slice(0,5).join(", ") +
+                (names.length>5 ? " ..." : "");
+
+      // แจ้ง admin ทาง LINE
+      notifyAdmin(msg);
+
+      // บันทึกลง CheckinLog (type=noshow_alert รวม)
+      logCheckinEvent("noshow_alert", sid, cls.name, cls.time, todayStr, "", names.join(","), true);
+
+      // บันทึกแยกรายคน
+      noShows.forEach(function(b){
+        var m = null;
+        for(var i=0;i<members.length;i++){ if(members[i].id===b.memberId){m=members[i];break;} }
+        logCheckinEvent("noshow", sid, cls.name, cls.time, todayStr, b.memberId, m?m.name:b.memberId, false);
+      });
+
+      Logger.log("[checkNoShows] " + cls.name + " " + cls.time + " → " + noShows.length + " no-show");
+    });
+  } catch(e) { Logger.log("checkNoShows error: "+e); }
+}
+
 function handleCheckin(d) {
   // ── Geofence check (100 m) ──────────────────────────────────
   if (d.lat != null && d.lng != null) {
@@ -1160,6 +1346,14 @@ function handleCheckin(d) {
     }
   }
   upsertAttendance(d.sessionId, d.memberId, "present");
+  // [v4.3] แจ้ง admin เมื่อสมาชิก self-checkin
+  try {
+    var m = readSheet(SHEETS.MEMBERS).filter(function(x){ return x.id===d.memberId; })[0];
+    var ci = getClassInfoFromSession(d.sessionId);
+    var memberName = m ? m.name : d.memberId;
+    notifyAdmin("✅ เช็คอิน: " + memberName + "\n🏋️ " + ci.name + " " + ci.time);
+    logCheckinEvent("checkin", d.sessionId, ci.name, ci.time, ci.date, d.memberId, memberName, true);
+  } catch(e2) { Logger.log("handleCheckin notify error: "+e2); }
   return { ok:true };
 }
 function getDistanceMeters(lat1, lng1, lat2, lng2) {
@@ -1171,6 +1365,18 @@ function getDistanceMeters(lat1, lng1, lat2, lng2) {
 }
 function handleMarkAttendance(d) {
   upsertAttendance(d.sessionId, d.memberId, d.status);
+  // [v4.3] log + notify admin
+  try {
+    var ci = getClassInfoFromSession(d.sessionId);
+    var m  = readSheet(SHEETS.MEMBERS).filter(function(x){ return x.id===d.memberId; })[0];
+    var memberName = m ? m.name : d.memberId;
+    if (d.status === "present") {
+      notifyAdmin("✅ เช็คอิน (Admin): " + memberName + "\n🏋️ " + ci.name + " " + ci.time);
+      logCheckinEvent("checkin", d.sessionId, ci.name, ci.time, ci.date, d.memberId, memberName, true);
+    } else if (d.status === "noshow") {
+      logCheckinEvent("noshow", d.sessionId, ci.name, ci.time, ci.date, d.memberId, memberName, false);
+    }
+  } catch(e2) { Logger.log("handleMarkAttendance notify error: "+e2); }
   if (d.status === "noshow") { var r = incrementNoShow(d.memberId); return { ok:true, result:r }; }
   return { ok:true };
 }
@@ -1363,16 +1569,7 @@ function handleSaveSettings(d) {
   return { ok: true, updatedUrls: updatedUrls };
 }
 
-// ════════════════════════════════════════════════════════
-// 👥 MEMBER MANAGEMENT
-// ════════════════════════════════════════════════════════
-function handleSaveMember(d) {
-  var m = d.member, sh = getSheet(SHEETS.MEMBERS), data = sh.getDataRange().getValues();
-  var row = [m.id,m.name,m.phone,m.pin||"1234",m.lineId||"",normalizeMembershipType(m.membershipType),m.membershipExpiry||"",m.sessionsLeft||"",m.noShowCount||0,m.suspended||false,m.suspendedUntil||"",m.deviceId||"",m.joinDate||"",m.photoUrl||"",m.lineUserId||""];
-  for (var i=1; i<data.length; i++) { if (data[i][0] === m.id) { sh.getRange(i+1,1,1,row.length).setValues([row]); return { ok:true, updated:true }; } }
-  sh.appendRow(row);
-  return { ok:true, created:true };
-}
+// ── handleUploadMemberPhoto (defined once here) ──────────────────────────────
 function handleUploadMemberPhoto(d) {
   if (!d.memberId || !d.photoBase64) return { ok:false, error:"missing data" };
   var url = saveBase64Image(d.photoBase64, d.memberId + "_photo.jpg");
@@ -1386,48 +1583,6 @@ function handleUploadMemberPhoto(d) {
   }
   return { ok:false, error:"ไม่พบสมาชิก" };
 }
-function handleUnlockDevice(d) {
-  var sh = getSheet(SHEETS.MEMBERS), data = sh.getDataRange().getValues();
-  for (var i=1; i<data.length; i++) { if (data[i][0] === d.memberId) { sh.getRange(i+1,12).setValue(""); return { ok:true }; } }
-  return { ok:false, error:"ไม่พบสมาชิก" };
-}
-
-// ✅ [v4.1 FIX] handleSaveSettings
-// - ตรวจค่าที่เป็น base64 รูปภาพ → อัปโหลด Drive → เก็บ URL แทน
-//   (ป้องกัน Sheets cell overflow: cell limit 50,000 chars, รูป 1400px ≈ 200,000+ chars)
-// - return updatedUrls เพื่อให้ Frontend อัปเดต state ด้วย Drive URL
-function handleSaveSettings(d) {
-  var sh   = getSheet(SHEETS.SETTINGS);
-  var data = sh.getDataRange().getValues();
-  var updatedUrls = {};
-
-  Object.keys(d.settings || {}).forEach(function(key) {
-    var value = d.settings[key];
-
-    // ถ้าค่าเป็น base64 รูปภาพ → อัปโหลด Drive ก่อน เก็บแค่ URL
-    if (typeof value === "string" && value.length > 500 && value.indexOf("data:image/") === 0) {
-      var url = saveBase64Image(value, key + "_" + Date.now() + ".jpg");
-      if (url) {
-        updatedUrls[key] = url;
-        value = url;
-      }
-    }
-
-    var found = false;
-    for (var i = 1; i < data.length; i++) {
-      if (String(data[i][0]) === String(key)) {
-        sh.getRange(i + 1, 2).setValue(value);
-        data[i][1] = value;
-        found = true;
-        break;
-      }
-    }
-    if (!found) sh.appendRow([key, value]);
-  });
-
-  return { ok: true, updatedUrls: updatedUrls };
-}
-
 // ✅ [v4.1 NEW] handleUploadImage
 // อัปโหลดรูปภาพเดี่ยวๆ แล้วคืน Drive URL
 // Frontend เรียก: postAction("uploadImage", { imageBase64, fileName })
@@ -1643,52 +1798,128 @@ function setupTriggers() {
   try { SpreadsheetApp.getUi().alert("✅ ตั้ง Triggers สำเร็จ!"); } catch(e) {}
 }
 
+// ════════════════════════════════════════════════════════
+// 🔔 [Phase 3] WAITLIST PENDING CONFIRMATION
+// เมื่อมีคนยกเลิก → แจ้ง WL อันดับ 1 → รอยืนยัน 45 นาที
+// ════════════════════════════════════════════════════════
+function handleConfirmWaitlistSpot(d) {
+  if (!d.memberId || !d.sessionId) return { ok: false, error: "ข้อมูลไม่ครบ" };
+  return withLock(function() {
+    var found = findSessionRow(d.sessionId);
+    if (!found) return { ok: false, error: "ไม่พบ session" };
+    var bk = parseList(found.data[3]);
+    // ตรวจว่าสมาชิกอยู่ในรายการจองหลักแล้วหรือยัง (ถูก auto-promote แล้ว)
+    if (bk.indexOf(d.memberId) !== -1) {
+      // ส่ง LINE ยืนยัน
+      var member = readSheet(SHEETS.MEMBERS).filter(function(m){ return m.id === d.memberId; })[0];
+      if (member && member.lineUserId) {
+        var cls = readSheet(SHEETS.CLASSES).filter(function(c){ return c.id === found.data[1]; })[0];
+        pushLineMessage(member.lineUserId,
+          "✅ ยืนยันที่นั่งสำเร็จ!\n\n" +
+          "🏋️ " + (cls ? cls.name : "คลาส") + "\n" +
+          "📅 " + found.data[2] + "\n" +
+          "เจอกันนะ 💪\n— Apex Fitness"
+        );
+      }
+      // บันทึก AppData ลบ pending
+      clearPendingWL(d.memberId, d.sessionId);
+      return { ok: true, confirmed: true };
+    }
+    // ยังไม่ได้อยู่ใน bk → promote ตอนนี้
+    if (bk.length < found.data.cap) {
+      bk.push(d.memberId);
+      var wl = parseList(found.data[4]).filter(function(x){ return x !== d.memberId; });
+      var sh = getSheet(SHEETS.SESSIONS);
+      setTextValue(sh, found.row, 4, bk.join(","));
+      setTextValue(sh, found.row, 5, wl.join(","));
+    }
+    clearPendingWL(d.memberId, d.sessionId);
+    return { ok: true, confirmed: true };
+  });
+}
+
+function handleDeclineWaitlistSpot(d) {
+  if (!d.memberId || !d.sessionId) return { ok: false, error: "ข้อมูลไม่ครบ" };
+  return withLock(function() {
+    // ลบออกจาก bk (ถ้า auto-promote ไปแล้ว)
+    var found = findSessionRow(d.sessionId);
+    if (found) {
+      var bk = parseList(found.data[3]).filter(function(x){ return x !== d.memberId; });
+      var wl = parseList(found.data[4]).filter(function(x){ return x !== d.memberId; });
+      var sh = getSheet(SHEETS.SESSIONS);
+      setTextValue(sh, found.row, 4, bk.join(","));
+      setTextValue(sh, found.row, 5, wl.join(","));
+      // แจ้ง WL คนถัดไป
+      if (wl.length > 0 && bk.length < Number(found.data.cap || 12)) {
+        var nextId = wl[0];
+        var cls = readSheet(SHEETS.CLASSES).filter(function(c){ return c.id === found.data[1]; })[0];
+        notifyWaitlistPromotion(nextId, d.sessionId, cls ? cls.name : "คลาส");
+      }
+    }
+    clearPendingWL(d.memberId, d.sessionId);
+    notify(d.memberId, "info", "ที่นั่งส่งต่อแล้ว", "ระบบส่งต่อที่นั่งให้คนถัดไปในสำรองแล้ว");
+    return { ok: true };
+  });
+}
+
+// Helper: ลบ pending WL entry จาก AppData
+function clearPendingWL(memberId, sessionId) {
+  try {
+    var sh = getOrCreateSheet(SHEETS.APPDATA, ["key","value"]);
+    var data = sh.getDataRange().getValues();
+    for (var i = 1; i < data.length; i++) {
+      if (String(data[i][0]) === "wlPending") {
+        var arr = JSON.parse(String(data[i][1] || "[]"));
+        arr = arr.filter(function(p){ return !(p.memberId === memberId && p.sessionId === sessionId); });
+        sh.getRange(i + 1, 2).setValue(JSON.stringify(arr));
+        return;
+      }
+    }
+  } catch(e) { Logger.log("clearPendingWL error: " + e); }
+}
+
+// ════════════════════════════════════════════════════════
+// 📱 [Admin] UPDATE MEMBER PHONE
+// Admin เปลี่ยนเบอร์โทรสมาชิก (พร้อม normalize 0xx-xxx-xxxx → 0xxxxxxxxx)
+// ════════════════════════════════════════════════════════
+function handleUpdateMemberPhone(d) {
+  if (!d.memberId || !d.newPhone) return { ok: false, error: "ต้องระบุ memberId และ newPhone" };
+  var clean = String(d.newPhone).replace(/\D/g, "");
+  // normalize: 9 หลัก → เติม 0 นำหน้า
+  if (clean.length === 9) clean = "0" + clean;
+  if (clean.length !== 10) return { ok: false, error: "เบอร์โทรต้องเป็น 10 หลัก" };
+  if (!/^0[689]/.test(clean)) return { ok: false, error: "เบอร์ต้องขึ้นต้นด้วย 06/08/09" };
+
+  var sh = getSheet(SHEETS.MEMBERS);
+  if (!sh) return { ok: false, error: "ไม่พบ sheet Members" };
+  var data = sh.getDataRange().getValues();
+  var headers = data[0];
+  var idCol    = headers.indexOf("id");
+  var phoneCol = headers.indexOf("phone");
+  if (idCol < 0 || phoneCol < 0) return { ok: false, error: "ไม่พบ column id หรือ phone" };
+
+  // ตรวจเบอร์ซ้ำ
+  for (var j = 1; j < data.length; j++) {
+    var existPhone = String(data[j][phoneCol] || "").replace(/\D/g, "");
+    if (existPhone === clean && String(data[j][idCol]) !== String(d.memberId)) {
+      return { ok: false, error: "เบอร์นี้ถูกใช้โดยสมาชิกอื่นแล้ว" };
+    }
+  }
+
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][idCol]) === String(d.memberId)) {
+      sh.getRange(i + 1, phoneCol + 1).setValue(clean);
+      Logger.log("[updatePhone] " + d.memberId + " → " + clean);
+      return { ok: true, newPhone: clean };
+    }
+  }
+  return { ok: false, error: "ไม่พบสมาชิก ID: " + d.memberId };
+}
+
 // [REMOVED: duplicate handleRescheduleSession — see improved version above at ~line 707]
 
 // ════════════════════════════════════════════════════════
 // ⏰ [v4.4] PRE-CLASS REMINDER
 // sendPreClassReminders() — ให้ Time Trigger เรียกทุก 1 ชั่วโมง
 // POST { action:"setupReminderTrigger", hoursBefore:2 }  — ตั้งหรืออัปเดต trigger
-// ════════════════════════════════════════════════════════
-function sendPreClassReminders() {
-  var settings = readSettingsObj();
-  var hours = parseInt(settings.reminderHoursBefore || "2", 10);
-  if (isNaN(hours) || hours < 1) return;
-
-  var now    = new Date();
-  var target = new Date(now.getTime() + hours * 3600 * 1000);
-  var targetDate = Utilities.formatDate(target, "GMT+7", "yyyy-MM-dd");
-  var targetHour = parseInt(Utilities.formatDate(target, "GMT+7", "HH"), 10);
-
-  var classes = readSheet(SHEETS.CLASSES).filter(function(c){ return c.active; });
-  var allMembers = readSheet(SHEETS.MEMBERS);
-  var memberMap = {};
-  allMembers.forEach(function(m){ memberMap[m.id] = m; });
-
-  classes.forEach(function(cls) {
-    var sid = cls.id + "_" + targetDate;
-    var clsHour = parseInt((cls.time || cls.t || "00:00").split(":")[0], 10);
-    if (clsHour !== targetHour) return;
-    var found = findSessionRow(sid);
-    if (!found) return;
-    var bk = parseList(found.data[3]);
-    bk.forEach(function(mid) {
-      var member = memberMap[mid];
-      if (!member || !member.lineUserId) return;
-      var msg = "🔔 แจ้งเตือนคลาส: " + cls.name + "\n📅 วันที่: " + targetDate + "\n⏰ เวลา: " + (cls.time || cls.t) + " น.\nโปรดมาตรงเวลา 💪";
-      try { sendLineMessage(member.lineUserId, msg); } catch(e) {}
-    });
-  });
-}
-
-function handleSetupReminderTrigger(d) {
-  var hours = parseInt(d.hoursBefore || "2", 10);
-  if (isNaN(hours) || hours < 1) hours = 2;
-  ScriptApp.getProjectTriggers().filter(function(t){ return t.getHandlerFunction() === "sendPreClassReminders"; })
-    .forEach(function(t){ ScriptApp.deleteTrigger(t); });
-  ScriptApp.newTrigger("sendPreClassReminders").timeBased().everyHours(1).create();
-  var settings = readSettingsObj();
-  settings.reminderHoursBefore = String(hours);
-  saveSettingsObj(settings);
-  return { ok: true, hoursBefore: hours };
-}
+// ═══════════════════════════════════════════════════�
