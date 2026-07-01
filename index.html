@@ -18,9 +18,9 @@
     }
   </script>
   <!-- Firebase SDK (โหลด sync เพื่อให้ OTP ทำงานทันที) -->
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
-  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js" defer></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js" crossorigin></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js" crossorigin></script>
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js" crossorigin defer></script>
   <style>
 /* ── Theme CSS Variables (auto-switch via body.apex-dark / body.apex-light) ── */
 :root, body.apex-dark {
@@ -618,16 +618,21 @@ body.apex-light {
   <script>
     window.onerror=function(msg,src,line,col,err){
       if(src&&(src.indexOf('line-scdn.net')>-1||src.indexOf('liff.line.me')>-1)) return true;
+      // cross-origin sanitized errors always arrive as "Script error." at line 0 — safe to ignore
+      if(!line||line===0||String(msg||'')==='Script error.') return true;
       var m=String(msg||'');
-      if(m.indexOf('fetch')>-1||m.indexOf('NetworkError')>-1||m.indexOf('Failed to fetch')>-1) return true;
+      if(m.indexOf('fetch')>-1||m.indexOf('NetworkError')>-1||m.indexOf('Failed to fetch')>-1||m.indexOf('Load failed')>-1) return true;
       document.getElementById("splash").classList.add("hidden");
       document.getElementById("err").classList.add("show");
       document.getElementById("err-msg").textContent=(err?err.toString():msg)+" (line "+line+")";
     };
     window.onunhandledrejection=function(e){
+      var reason=e.reason?e.reason.toString():'';
+      // ignore network/fetch errors — these are expected when GAS/Firebase is slow on mobile
+      if(!reason||reason.indexOf('fetch')>-1||reason.indexOf('NetworkError')>-1||reason.indexOf('Failed to fetch')>-1||reason.indexOf('Load failed')>-1) return;
       document.getElementById("splash").classList.add("hidden");
       document.getElementById("err").classList.add("show");
-      document.getElementById("err-msg").textContent=e.reason?e.reason.toString():"Promise rejected";
+      document.getElementById("err-msg").textContent=reason||"Promise rejected";
     };
     // Firebase init (sync — SDK โหลดแล้ว)
     try{
