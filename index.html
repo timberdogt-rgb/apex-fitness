@@ -1047,6 +1047,15 @@ const thFmt = (d) => {
   return `${x.getDate()} ${MO[x.getMonth()]} ${x.getFullYear() + 543}`;
 };
 const nowISO = () => (/* @__PURE__ */ new Date()).toISOString();
+// [FIX#CLASSTIME] แปลง classTime จาก Sheets Date(1899-12-30T...) → "HH:MM"
+const fmtClassTime = (v) => {
+  if (!v) return "";
+  const s = String(v);
+  if (/^\d{1,2}:\d{2}/.test(s)) return s.slice(0, 5); // already "HH:MM"
+  const m = s.match(/T(\d{2}):(\d{2})/);
+  if (m) { const h = (parseInt(m[1]) + 7) % 24; return (h < 10 ? "0" : "") + h + ":" + m[2]; }
+  return s;
+};
 const timeAgo = (iso) => {
   if (!iso) return "\u0E44\u0E21\u0E48\u0E17\u0E23\u0E32\u0E1A\u0E27\u0E31\u0E19\u0E17\u0E35\u0E48"; // \u0E44\u0E21\u0E48\u0E17\u0E23\u0E32\u0E1A\u0E27\u0E31\u0E19\u0E17\u0E35\u0E48
   const t = new Date(iso).getTime();
@@ -2630,7 +2639,7 @@ function AdminNotifLog({ notifications, members, checkinLog, onSeen }) {
               ),
               React.createElement("div", { style: { color: C.sub, fontSize: 12, marginTop: 2 } },
                 React.createElement("span", { style: { color: isCheckin?C.green:C.amber, fontWeight: 700 } }, isCheckin?"\u0E40\u0E0A\u0E47\u0E04\u0E2D\u0E34\u0E19\u0E41\u0E25\u0E49\u0E27":"\u0E22\u0E31\u0E07\u0E44\u0E21\u0E48\u0E40\u0E0A\u0E47\u0E04\u0E2D\u0E34\u0E19"),
-                " \u00B7 \uD83C\uDFCB\uFE0F "+String(r.className||"")+" "+String(r.classTime||"")
+                " \u00B7 \uD83C\uDFCB\uFE0F "+String(r.className||"")+" "+fmtClassTime(r.classTime)
               ),
               r.notifiedViaLine==="TRUE" && React.createElement("div", { style: { color: C.line, fontSize: 10, marginTop: 2 } }, "\uD83D\uDCF2 \u0E2A\u0E48\u0E07 LINE \u0E41\u0E25\u0E49\u0E27")
             )
