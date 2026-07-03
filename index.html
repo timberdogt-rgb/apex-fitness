@@ -3245,7 +3245,8 @@ function App() {
               setEtiquetteRules(_sd.etiquetteRules);
             }
             if (_sd && Array.isArray(_sd.checkinLog)) {
-              setCheckinLog(_sd.checkinLog); // [v4.3]
+              const _seenCL={};
+              setCheckinLog(_sd.checkinLog.filter(function(r){if(r.type!=='checkin')return true;const _k=String(r.sessionId)+'|'+String(r.memberId);if(_seenCL[_k])return false;_seenCL[_k]=true;return true;})); // [v4.3]
             }
             // Convert settings array [{key,value},...] → object {key:value,...}
               if (_sd && _sd.settings) {
@@ -3805,7 +3806,7 @@ function App() {
             });
           }
           if (_d.guestBookings) { setGuestBookings(_d.guestBookings); store.set("apex_guest_bookings", _d.guestBookings); }
-          if (_d.checkinLog) { setCheckinLog(_d.checkinLog); } // [v4.3]
+          if(_d.checkinLog){const _seenCL2={};setCheckinLog(_d.checkinLog.filter(function(r){if(r.type!=='checkin')return true;const _k=String(r.sessionId)+'|'+String(r.memberId);if(_seenCL2[_k])return false;_seenCL2[_k]=true;return true;}));} // [v4.3]
         }
       } catch (e) { console.log("Polling Sync:", e); }
     };
