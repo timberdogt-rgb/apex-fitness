@@ -18,9 +18,9 @@
     }
   </script>
   <!-- Firebase SDK (โหลด sync เพื่อให้ OTP ทำงานทันที) -->
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js" crossorigin></script>
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js" crossorigin></script>
-  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js" crossorigin defer></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js" defer></script>
   <style>
 /* ── Theme CSS Variables (auto-switch via body.apex-dark / body.apex-light) ── */
 :root, body.apex-dark {
@@ -608,33 +608,26 @@ body.apex-light {
   </div>
   <div id="err">
     <div style="font-size:48px">⚠️</div>
-    <h2>แอปเกิดข้อผิดพลาด</h2>
-    <p>กำลังโหลดใหม่อัตโนมัติใน 5 วินาที...</p>
+    <h2>เกิดข้อผิดพลาด</h2>
+    <p>ไม่สามารถโหลดระบบได้ กรุณารีเฟรชหน้าเว็บ</p>
     <code id="err-msg"></code>
-    <button onclick="location.reload()" style="margin-top:8px;padding:10px 24px;background:#F97316;border:none;border-radius:10px;color:#fff;font-size:14px;cursor:pointer">🔄 รีเฟรชเดี๋ยวนี้</button>
+    <button onclick="location.reload()" style="margin-top:8px;padding:10px 24px;background:#F97316;border:none;border-radius:10px;color:#fff;font-size:14px;cursor:pointer">รีเฟรชหน้าเว็บ</button>
   </div>
   <div id="apex-sync-dot"><span></span>กำลังอัปเดต...</div>
   <div id="root"></div>
   <script>
     window.onerror=function(msg,src,line,col,err){
       if(src&&(src.indexOf('line-scdn.net')>-1||src.indexOf('liff.line.me')>-1)) return true;
-      // cross-origin sanitized errors always arrive as "Script error." at line 0 — safe to ignore
-      if(!line||line===0||String(msg||'')==='Script error.') return true;
       var m=String(msg||'');
-      if(m.indexOf('fetch')>-1||m.indexOf('NetworkError')>-1||m.indexOf('Failed to fetch')>-1||m.indexOf('Load failed')>-1) return true;
+      if(m.indexOf('fetch')>-1||m.indexOf('NetworkError')>-1||m.indexOf('Failed to fetch')>-1) return true;
       document.getElementById("splash").classList.add("hidden");
       document.getElementById("err").classList.add("show");
       document.getElementById("err-msg").textContent=(err?err.toString():msg)+" (line "+line+")";
-      // [FIX#ERR] auto-reload หลัง 5 วินาที
-      setTimeout(function(){ try { location.reload(); } catch(e){} }, 5000);
     };
     window.onunhandledrejection=function(e){
-      var reason=e.reason?e.reason.toString():'';
-      // ignore network/fetch errors — these are expected when GAS/Firebase is slow on mobile
-      if(!reason||reason.indexOf('fetch')>-1||reason.indexOf('NetworkError')>-1||reason.indexOf('Failed to fetch')>-1||reason.indexOf('Load failed')>-1) return;
       document.getElementById("splash").classList.add("hidden");
       document.getElementById("err").classList.add("show");
-      document.getElementById("err-msg").textContent=reason||"Promise rejected";
+      document.getElementById("err-msg").textContent=e.reason?e.reason.toString():"Promise rejected";
     };
     // Firebase init (sync — SDK โหลดแล้ว)
     try{
@@ -1047,15 +1040,6 @@ const thFmt = (d) => {
   return `${x.getDate()} ${MO[x.getMonth()]} ${x.getFullYear() + 543}`;
 };
 const nowISO = () => (/* @__PURE__ */ new Date()).toISOString();
-// [FIX#CLASSTIME] แปลง classTime จาก Sheets Date(1899-12-30T...) → "HH:MM"
-const fmtClassTime = (v) => {
-  if (!v) return "";
-  const s = String(v);
-  if (/^\d{1,2}:\d{2}/.test(s)) return s.slice(0, 5); // already "HH:MM"
-  const m = s.match(/T(\d{2}):(\d{2})/);
-  if (m) { const h = (parseInt(m[1]) + 7) % 24; return (h < 10 ? "0" : "") + h + ":" + m[2]; }
-  return s;
-};
 const timeAgo = (iso) => {
   if (!iso) return "\u0E44\u0E21\u0E48\u0E17\u0E23\u0E32\u0E1A\u0E27\u0E31\u0E19\u0E17\u0E35\u0E48"; // \u0E44\u0E21\u0E48\u0E17\u0E23\u0E32\u0E1A\u0E27\u0E31\u0E19\u0E17\u0E35\u0E48
   const t = new Date(iso).getTime();
@@ -1109,18 +1093,31 @@ const verifyGPS = () => new Promise((res, rej) => {
     { enableHighAccuracy: true, timeout: 12e3, maximumAge: 3e4 }
   );
 });
+const _CACHE_TTL_MS = 5 * 60 * 1000; // 5 นาที
+const _CACHE_DATA_KEYS = ["apex_members","apex_sessions","apex_classes","apex_settings","apex_notifs","apex_guest_bookings","apex_feedback"];
 const store = {
   async get(k) {
     try {
       const v = localStorage.getItem(k);
-      return v ? JSON.parse(v) : null;
+      if (!v) return null;
+      const p = JSON.parse(v);
+      // ถ้า key นี้มี TTL และ data wrap ด้วย {_d, _ts}
+      if (_CACHE_DATA_KEYS.indexOf(k) !== -1 && p && p._ts !== undefined) {
+        if (Date.now() - p._ts > _CACHE_TTL_MS) return null; // หมดอายุ
+        return p._d;
+      }
+      return p;
     } catch (e) {
       return null;
     }
   },
   async set(k, v) {
     try {
-      localStorage.setItem(k, JSON.stringify(v));
+      if (_CACHE_DATA_KEYS.indexOf(k) !== -1) {
+        localStorage.setItem(k, JSON.stringify({ _d: v, _ts: Date.now() }));
+      } else {
+        localStorage.setItem(k, JSON.stringify(v));
+      }
     } catch (e) {
     }
   }
@@ -2567,85 +2564,13 @@ const { useState } = React;
     )
   );
 }
-function AdminNotifLog({ notifications, members, checkinLog, onSeen }) {
-  const [tab, setTab] = React.useState("all"); // all / checkin / noshow
-  const [days, setDays] = React.useState(1); // 1,3,7
-  React.useEffect(() => { if (onSeen) onSeen(); }, []); // mark seen when opened
-
-  // \u0E01\u0E23\u0E2D\u0E07 checkinLog \u0E15\u0E32\u0E21 tab + days
-  const logs = React.useMemo(() => {
-    var rows = (checkinLog||[]).filter(function(r){ return r.type !== "noshow_alert"; });
-    if (tab === "checkin") rows = rows.filter(function(r){ return r.type === "checkin"; });
-    if (tab === "noshow")  rows = rows.filter(function(r){ return r.type === "noshow"; });
-    var cutoff = new Date(Date.now() - days*86400*1000).toISOString();
-    rows = rows.filter(function(r){ return String(r.markedAt||"") >= cutoff; });
-    return rows.slice(0, 100);
-  }, [checkinLog, tab, days]);
-
-  const fmtTime = function(iso) {
-    if (!iso) return "";
-    try {
-      var d = new Date(iso);
-      if (isNaN(d)) return iso;
-      var bkk = new Date(d.getTime() + 7*3600*1000);
-      var h = bkk.getUTCHours(), mn = bkk.getUTCMinutes();
-      var date = bkk.toISOString().slice(0,10);
-      return date + " " + String(h).padStart(2,"0") + ":" + String(mn).padStart(2,"0");
-    } catch(e) { return iso; }
-  };
-
-  var TAB_BTNS = [["all","\u{1F4CB} \u0E17\u0E31\u0E49\u0E07\u0E2B\u0E21\u0E14"],["checkin","\u2705 \u0E40\u0E0A\u0E47\u0E04\u0E2D\u0E34\u0E19"],["noshow","\u23F0 \u0E44\u0E21\u0E48\u0E21\u0E32"]];
-  var DAY_BTNS = [[1,"\u0E27\u0E31\u0E19\u0E19\u0E35\u0E49"],[3,"3 \u0E27\u0E31\u0E19"],[7,"7 \u0E27\u0E31\u0E19"]];
-
-  return React.createElement("div", null,
-    // Header info
-    React.createElement("div", { style: { background: C.lineM, border: "1px solid "+C.line, borderRadius: 12, padding: 12, marginBottom: 12 } },
-      React.createElement("div", { style: { color: C.line, fontWeight: 700, fontSize: 13, marginBottom: 2 } }, "\uD83D\uDCF2 \u0E41\u0E08\u0E49\u0E07\u0E40\u0E15\u0E37\u0E2D\u0E19 Check-in / No-show"),
-      React.createElement("div", { style: { color: C.muted, fontSize: 11 } }, "LINE Push \u0E2A\u0E48\u0E07\u0E40\u0E21\u0E37\u0E48\u0E2D\u0E40\u0E0A\u0E47\u0E04\u0E2D\u0E34\u0E19 \u0E41\u0E25\u0E30\u0E15\u0E23\u0E27\u0E08 No-show \u0E2D\u0E31\u0E15\u0E42\u0E19\u0E21\u0E31\u0E15\u0E34\u0E17\u0E38\u0E01 15 \u0E19\u0E32\u0E17\u0E35\u0E2B\u0E25\u0E31\u0E07\u0E04\u0E25\u0E32\u0E2A\u0E40\u0E23\u0E34\u0E48\u0E21")
-    ),
-    // Tab filter
-    React.createElement("div", { style: { display: "flex", gap: 6, marginBottom: 10 } },
-      TAB_BTNS.map(function(tb) {
-        return React.createElement("button", { key: tb[0], onClick: function(){ setTab(tb[0]); },
-          style: { flex: 1, padding: "7px 4px", borderRadius: 10, border: "1.5px solid "+(tab===tb[0]?C.orange:C.border),
-            background: tab===tb[0]?C.oM:"transparent", color: tab===tb[0]?C.orange:C.muted,
-            fontWeight: tab===tb[0]?700:500, fontSize: 11, cursor: "pointer", fontFamily: FONT } }, tb[1]);
-      })
-    ),
-    // Days filter
-    React.createElement("div", { style: { display: "flex", gap: 6, marginBottom: 14 } },
-      DAY_BTNS.map(function(db) {
-        return React.createElement("button", { key: db[0], onClick: function(){ setDays(db[0]); },
-          style: { padding: "5px 12px", borderRadius: 8, border: "1px solid "+(days===db[0]?C.orange:C.border),
-            background: days===db[0]?C.oM:"transparent", color: days===db[0]?C.orange:C.muted,
-            fontWeight: days===db[0]?700:500, fontSize: 11, cursor: "pointer", fontFamily: FONT } }, db[1]);
-      })
-    ),
-    // List
-    logs.length === 0
-      ? React.createElement("div", { style: { textAlign: "center", padding: "40px 0", color: C.muted, fontSize: 13 } }, "\u0E22\u0E31\u0E07\u0E44\u0E21\u0E48\u0E21\u0E35\u0E23\u0E32\u0E22\u0E01\u0E32\u0E23\u0E43\u0E19\u0E0A\u0E48\u0E27\u0E07\u0E40\u0E27\u0E25\u0E32\u0E19\u0E35\u0E49")
-      : logs.map(function(r, i) {
-          var isCheckin = r.type === "checkin";
-          var ic = isCheckin ? "\u2705" : "\u23F0";
-          var borderCol = isCheckin ? C.green : C.amber;
-          return React.createElement("div", { key: r.id||i,
-            style: { background: C.surf, borderRadius: 12, border: "1px solid "+borderCol+"55",
-              padding: "10px 12px", marginBottom: 7, display: "flex", gap: 10, alignItems: "flex-start" } },
-            React.createElement("div", { style: { fontSize: 18, flexShrink: 0 } }, ic),
-            React.createElement("div", { style: { flex: 1 } },
-              React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 4 } },
-                React.createElement("span", { style: { color: C.text, fontWeight: 700, fontSize: 13 } }, r.memberName||r.memberId||"-"),
-                React.createElement("span", { style: { color: C.muted, fontSize: 10, whiteSpace: "nowrap" } }, fmtTime(r.markedAt))
-              ),
-              React.createElement("div", { style: { color: C.sub, fontSize: 12, marginTop: 2 } },
-                React.createElement("span", { style: { color: isCheckin?C.green:C.amber, fontWeight: 700 } }, isCheckin?"\u0E40\u0E0A\u0E47\u0E04\u0E2D\u0E34\u0E19\u0E41\u0E25\u0E49\u0E27":"\u0E22\u0E31\u0E07\u0E44\u0E21\u0E48\u0E40\u0E0A\u0E47\u0E04\u0E2D\u0E34\u0E19"),
-                " \u00B7 \uD83C\uDFCB\uFE0F "+String(r.className||"")+" "+fmtClassTime(r.classTime)
-              ),
-              r.notifiedViaLine==="TRUE" && React.createElement("div", { style: { color: C.line, fontSize: 10, marginTop: 2 } }, "\uD83D\uDCF2 \u0E2A\u0E48\u0E07 LINE \u0E41\u0E25\u0E49\u0E27")
-            )
-          );
-        })
-  );
+function AdminNotifLog({ notifications, members }) {
+  const all = useMemo(() => (notifications || []).slice().sort((a, b) => String(b.ts||"").localeCompare(String(a.ts||""))).slice(0, 50), [notifications]);
+  const ICON = { promoted: "\u{1F389}", cancelled: "\u{1F5D1}\uFE0F", reminder: "\u23F0", suspended: "\u{1F6AB}", membership: "\u{1F4B3}", info: "\u2139\uFE0F" };
+  return /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("div", { style: { background: C.lineM, border: `1px solid ${C.line}`, borderRadius: 12, padding: 14, marginBottom: 14 } }, /* @__PURE__ */ React.createElement("div", { style: { color: C.line, fontWeight: 700, fontSize: 13, marginBottom: 4 } }, "\u{1F4AC} LINE Notify Log"), /* @__PURE__ */ React.createElement("div", { style: { color: C.muted, fontSize: 12 } }, "\u0E02\u0E49\u0E2D\u0E04\u0E27\u0E32\u0E21\u0E17\u0E35\u0E48\u0E23\u0E30\u0E1A\u0E1A\u0E2A\u0E48\u0E07\u0E43\u0E2B\u0E49\u0E2A\u0E21\u0E32\u0E0A\u0E34\u0E01 (\u0E08\u0E33\u0E25\u0E2D\u0E07) \u2014 \u0E40\u0E21\u0E37\u0E48\u0E2D\u0E15\u0E48\u0E2D LINE \u0E08\u0E23\u0E34\u0E07 \u0E02\u0E49\u0E2D\u0E04\u0E27\u0E32\u0E21\u0E40\u0E2B\u0E25\u0E48\u0E32\u0E19\u0E35\u0E49\u0E08\u0E30\u0E16\u0E39\u0E01\u0E2A\u0E48\u0E07\u0E1C\u0E48\u0E32\u0E19 LINE Messaging API")), all.length === 0 ? /* @__PURE__ */ React.createElement("div", { style: { textAlign: "center", padding: "40px 0", color: C.muted } }, "\u0E22\u0E31\u0E07\u0E44\u0E21\u0E48\u0E21\u0E35\u0E01\u0E32\u0E23\u0E41\u0E08\u0E49\u0E07\u0E40\u0E15\u0E37\u0E2D\u0E19") : all.map((n) => {
+    const m = members.find((x) => x.id === n.mid);
+    return /* @__PURE__ */ React.createElement("div", { key: n.id, style: { background: C.surf, borderRadius: 12, border: `1px solid ${C.border}`, padding: 12, marginBottom: 8 } }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 10, alignItems: "flex-start" } }, /* @__PURE__ */ React.createElement("div", { style: { fontSize: 20, flexShrink: 0 } }, ICON[n.type] || "\u{1F514}"), /* @__PURE__ */ React.createElement("div", { style: { flex: 1 } }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", justifyContent: "space-between" } }, /* @__PURE__ */ React.createElement("span", { style: { color: C.text, fontWeight: 700, fontSize: 13 } }, n.title), /* @__PURE__ */ React.createElement("span", { style: { color: C.muted, fontSize: 10 } }, timeAgo(n.ts))), /* @__PURE__ */ React.createElement("div", { style: { color: C.sub, fontSize: 12, marginTop: 2 } }, n.body), /* @__PURE__ */ React.createElement("div", { style: { color: C.line, fontSize: 10, marginTop: 4 } }, "\u2192 \u0E2A\u0E48\u0E07\u0E16\u0E36\u0E07: ", (m == null ? void 0 : m.name) || n.mid, " ", (m == null ? void 0 : m.lineId) && `(LINE: ${m.lineId})`))));
+  }));
 }
 function AdminWalkIn({ guestBookings, onConfirm, showToast }) {
   const pending = useMemo(() => (guestBookings || []).filter((g) => g.status === "pending").sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt))), [guestBookings]);
@@ -3044,7 +2969,6 @@ function App() {
   const [pendingWL, setPendingWL] = useState([]); // Phase 3: pending WL confirmations
   const [staff, setStaff] = useState([]);
   const [etiquetteRules, setEtiquetteRules] = useState(DEFAULT_ETIQUETTE_RULES);
-  const [checkinLog, setCheckinLog] = useState([]); // [v4.3] admin checkin/noshow log
   const [showGuestFlow, setShowGuestFlow] = useState(false);
   const [showAdminMore, setShowAdminMore] = useState(false);
   const [view, setView] = useState("schedule");
@@ -3244,10 +3168,6 @@ function App() {
             if (_sd && Array.isArray(_sd.etiquetteRules) && _sd.etiquetteRules.length > 0) {
               setEtiquetteRules(_sd.etiquetteRules);
             }
-            if (_sd && Array.isArray(_sd.checkinLog)) {
-              const _seenCL={};
-              setCheckinLog(_sd.checkinLog.filter(function(r){if(r.type!=='checkin')return true;const _k=String(r.sessionId)+'|'+String(r.memberId);if(_seenCL[_k])return false;_seenCL[_k]=true;return true;})); // [v4.3]
-            }
             // Convert settings array [{key,value},...] → object {key:value,...}
               if (_sd && _sd.settings) {
                 if (Array.isArray(_sd.settings)) {
@@ -3300,7 +3220,6 @@ function App() {
             if (se_built[sid] && _sheetsSessions[sid]) {
               se_built[sid].bk = _sheetsSessions[sid].bk || [];
               se_built[sid].wl = _sheetsSessions[sid].wl || [];
-              se_built[sid].att = _sheetsSessions[sid].att || {}; // [FIX#ATT] restore attendance from Sheets
             }
           });
         }
@@ -3780,57 +3699,55 @@ function App() {
         const _d = await _r.json();
         if (_d && isMounted) {
           if (_d.members) { setMembers(_d.members); store.set("apex_members", _d.members); }
-          if (_d.sessions && _d.classes) {
-            // [FIX#POLL][FIX#CACHE] คำนวณ _pollNext นอก setSessions เพื่อ save processed data ลง localStorage
-            // (เดิม save _d.sessions ดิบ ทำให้ bk=[] หลัง reload ถ้า GAS ช้า)
-            var _clsMap3 = {}; (_d.classes||[]).forEach(function(c){ _clsMap3[c.id]=c; });
-            var _pollNext = buildSessions(_d.classes||[]);
-            // Apply sessions data: bk + wl with timezone fix
-            _d.sessions.forEach(function(s) {
-              var cls=_clsMap3[String(s.classId||"")]; if(!cls) return;
-              var sDate; if(s.date){var _dv=new Date(s.date);if(!isNaN(_dv.getTime())){var _bkk=new Date(_dv.getTime()+7*3600*1000);sDate=_bkk.toISOString().split("T")[0];}else{sDate=String(s.date).replace(/T.*/,"").slice(0,10);}}else{sDate="";}
-              if(!sDate||sDate.length!==10) return;
-              var tsid=cls.id+"_"+sDate;
-              if(_pollNext[tsid]){var bk=healIds(s.bookings),wl=healIds(s.waitlist);_pollNext[tsid].bk=bk;_pollNext[tsid].wl=wl;}
-            });
-            // Apply bookings sheet
-            if(_d.bookings) _d.bookings.forEach(function(b){var sid=String(b.sessionId||"").trim(),mid=String(b.memberId||"").trim();if(_pollNext[sid]&&mid&&(b.type==="main"||!b.type)&&_pollNext[sid].bk.indexOf(mid)===-1)_pollNext[sid].bk.push(mid);});
-            // Apply attendance from server (check-in จาก Kiosk/Admin จะโชว์ใน Attend view)
-            if(_d.attendance) _d.attendance.forEach(function(a){var sid=String(a.sessionId||"").trim(),mid=String(a.memberId||"").trim();if(_pollNext[sid]&&mid&&a.status)_pollNext[sid].att[mid]=String(a.status);});
-            // [FIX#CACHE] Save processed sessions (bk=[...], att={...}) ไม่ใช่ raw _d.sessions
-            store.set("apex_sessions", _pollNext);
-            // Update React state — merge local optimistic att ที่ยังไม่ sync ขึ้น server
-            setSessions(function(prev) {
-              Object.keys(prev).forEach(function(sid){if(_pollNext[sid]&&prev[sid]&&prev[sid].att){Object.keys(prev[sid].att).forEach(function(mid){if(!_pollNext[sid].att[mid])_pollNext[sid].att[mid]=prev[sid].att[mid];});}});
-              return _pollNext;
-            });
-          }
+          if (_d.sessions) { setSessions(buildSessions(_d.classes || [])); store.set("apex_sessions", _d.sessions); }
           if (_d.guestBookings) { setGuestBookings(_d.guestBookings); store.set("apex_guest_bookings", _d.guestBookings); }
-          if(_d.checkinLog){const _seenCL2={};setCheckinLog(_d.checkinLog.filter(function(r){if(r.type!=='checkin')return true;const _k=String(r.sessionId)+'|'+String(r.memberId);if(_seenCL2[_k])return false;_seenCL2[_k]=true;return true;}));} // [v4.3]
         }
       } catch (e) { console.log("Polling Sync:", e); }
     };
     const _tid = setInterval(_poll, 15000); // ปรับให้อัปเดตไวขึ้นทุก 15 วินาที
-    // [FIX#VISIBILITY] — LINE browser kills polling when app goes to background
-    // Resume immediately when user comes back, then let interval take over
-    const _onVisible = () => { if (document.visibilityState === "visible" && isMounted) { _poll(); } };
-    document.addEventListener("visibilitychange", _onVisible);
-    return () => { isMounted = false; clearInterval(_tid); document.removeEventListener("visibilitychange", _onVisible); };
+    return () => { isMounted = false; clearInterval(_tid); };
   }, [isAdmin]);
 
+  // ── [FIX] Auto-refresh เมื่อผู้ใช้กลับมาที่แอป (แก้ข้อมูลค้าง cache) ──
+  React.useEffect(() => {
+    if (!APPS_SCRIPT_URL) return;
+    let _refreshing = false;
+    const _onVisible = async () => {
+      if (document.visibilityState !== "visible" || _refreshing) return;
+      _refreshing = true;
+      try {
+        const _r = await fetch(APPS_SCRIPT_URL + "?action=getAll", {signal: AbortSignal.timeout(10000)});
+        const _d = await _r.json();
+        if (_d && _d.members && _d.members.length > 0) {
+          const _nm = _d.members.map(function(m){ return {
+            id:String(m.id||""), name:String(m.name||""), phone:String(m.phone||""),
+            pin:String(m.pin||"1234"), lineId:String(m.lineId||""),
+            membershipType:String(m.membershipType||"monthly"),
+            membershipExpiry:m.membershipExpiry?String(m.membershipExpiry).replace(/T.*/,""):"",
+            sessionsLeft:m.sessionsLeft!==""&&m.sessionsLeft!==null?Number(m.sessionsLeft)||0:null,
+            noShowCount:Number(m.noShowCount)||0,
+            suspended:m.suspended===true||String(m.suspended).toUpperCase()==="TRUE",
+            suspendedUntil:m.suspendedUntil?String(m.suspendedUntil).replace(/T.*/,""):null,
+            deviceId:m.deviceId?String(m.deviceId):null,
+            joinDate:m.joinDate?String(m.joinDate).replace(/T.*/,""):"",
+            photoUrl:m.photoUrl?String(m.photoUrl):"",
+            lineUserId:m.lineUserId?String(m.lineUserId):"",
+            noShowDates:m.noShowDates?String(m.noShowDates):"",
+            penaltyLevel:m.penaltyLevel!==undefined&&m.penaltyLevel!==""?Number(m.penaltyLevel):0,
+            wlOptIn:m.wlOptIn===true||String(m.wlOptIn).toUpperCase()==="TRUE"
+          }; });
+          setMembers(_nm);
+          await store.set("apex_members", _nm);
+          console.log("✅ visibilitychange: refreshed", _nm.length, "members");
+        }
+      } catch(e) { console.log("visibilitychange refresh:", e); }
+      _refreshing = false;
+    };
+    document.addEventListener("visibilitychange", _onVisible);
+    return () => document.removeEventListener("visibilitychange", _onVisible);
+  }, []);
+
 const unreadCount = useMemo(() => cur ? (notifications || []).filter((n) => n.mid === cur.id && !n.read).length : 0, [notifications, cur]);
-  // [v4.3] badge สำหรับ notiflog — นับ event ใน checkinLog ที่ใหม่กว่า lastSeenNotifTs
-  const [lastSeenNotifTs, setLastSeenNotifTs] = useState(() => {
-    try { return localStorage.getItem("apex_last_seen_notif") || ""; } catch(e) { return ""; }
-  });
-  const notifLogBadge = useMemo(() => {
-    if (!checkinLog || !checkinLog.length) return 0;
-    return checkinLog.filter(function(r){ return r.type!=="noshow_alert" && String(r.markedAt||"") > lastSeenNotifTs; }).length;
-  }, [checkinLog, lastSeenNotifTs]);
-  const markNotifLogSeen = useCallback(() => {
-    var latest = checkinLog && checkinLog.length ? (checkinLog[0].markedAt||"") : "";
-    if (latest) { try { localStorage.setItem("apex_last_seen_notif", latest); } catch(e){} setLastSeenNotifTs(latest); }
-  }, [checkinLog]);
   const pendingGuestCount = useMemo(() => (guestBookings || []).filter((g) => g.status === "pending").length, [guestBookings]);
   const openFeedbackCount = useMemo(() => (feedback || []).filter((f) => f.status === "open").length, [feedback]);
   const expiringCount = useMemo(() => {
@@ -3851,7 +3768,7 @@ const unreadCount = useMemo(() => cur ? (notifications || []).filter((n) => n.mi
     onLineLogin: lineLogin,
   }), showGuestFlow && /* @__PURE__ */ React.createElement(GuestBookingFlow, { sessions, settings, onSubmit: submitGuestBooking, onClose: () => setShowGuestFlow(false), showToast }));
   const USER_NAV = [{ id: "schedule", ic: NAV_ICONS.schedule, lb: "\u0E15\u0E32\u0E23\u0E32\u0E07\u0E04\u0E25\u0E32\u0E2A" }, { id: "myBookings", ic: NAV_ICONS.myBookings, lb: "\u0E01\u0E32\u0E23\u0E08\u0E2D\u0E07" }, { id: "checkin", ic: NAV_ICONS.checkin, lb: "\u0E40\u0E0A\u0E47\u0E04\u0E2D\u0E34\u0E19" }, { id: "notifs", ic: NAV_ICONS.notifs, lb: "\u0E41\u0E08\u0E49\u0E07\u0E40\u0E15\u0E37\u0E2D\u0E19", badge: unreadCount }, { id: "feedback", ic: NAV_ICONS.feedback, lb: "\u0E41\u0E08\u0E49\u0E07/\u0E40\u0E2A\u0E19\u0E2D" }, { id: "profile", ic: NAV_ICONS.profile, lb: "\u0E42\u0E1B\u0E23\u0E44\u0E1F\u0E25\u0E4C" }];
-  const OWNER_NAV = [{ id: "overview", ic: NAV_ICONS.overview, lb: "\u0E20\u0E32\u0E1E\u0E23\u0E27\u0E21" }, { id: "attend", ic: NAV_ICONS.attend, lb: "\u0E40\u0E02\u0E49\u0E32\u0E23\u0E48\u0E27\u0E21" }, { id: "kiosk", ic: NAV_ICONS.kiosk, lb: "Kiosk" }, { id: "walkin", ic: NAV_ICONS.walkin, lb: "Walk-in", badge: pendingGuestCount }, { id: "members", ic: NAV_ICONS.members, lb: "\u0E2A\u0E21\u0E32\u0E0A\u0E34\u0E01" }, { id: "expiring", ic: NAV_ICONS.expiring, lb: "\u0E43\u0E01\u0E25\u0E49\u0E2B\u0E21\u0E14", badge: expiringCount }, { id: "adminfeedback", ic: NAV_ICONS.feedback, lb: "\u0E02\u0E49\u0E2D\u0E40\u0E2A\u0E19\u0E2D\u0E41\u0E19\u0E30", badge: openFeedbackCount }, { id: "notiflog", ic: NAV_ICONS.notiflog, lb: "แจ้งเตือน", badge: notifLogBadge }, { id: "reports", ic: NAV_ICONS.reports, lb: "\u0E23\u0E32\u0E22\u0E07\u0E32\u0E19" }, { id: "settings", ic: NAV_ICONS.settings, lb: "\u0E15\u0E31\u0E49\u0E07\u0E04\u0E48\u0E32" }, { id: "staffmgmt", ic: NAV_ICONS.staffmgmt, lb: "\u0E17\u0E35\u0E21\u0E07\u0E32\u0E19" }];
+  const OWNER_NAV = [{ id: "overview", ic: NAV_ICONS.overview, lb: "\u0E20\u0E32\u0E1E\u0E23\u0E27\u0E21" }, { id: "attend", ic: NAV_ICONS.attend, lb: "\u0E40\u0E02\u0E49\u0E32\u0E23\u0E48\u0E27\u0E21" }, { id: "kiosk", ic: NAV_ICONS.kiosk, lb: "Kiosk" }, { id: "walkin", ic: NAV_ICONS.walkin, lb: "Walk-in", badge: pendingGuestCount }, { id: "members", ic: NAV_ICONS.members, lb: "\u0E2A\u0E21\u0E32\u0E0A\u0E34\u0E01" }, { id: "expiring", ic: NAV_ICONS.expiring, lb: "\u0E43\u0E01\u0E25\u0E49\u0E2B\u0E21\u0E14", badge: expiringCount }, { id: "adminfeedback", ic: NAV_ICONS.feedback, lb: "\u0E02\u0E49\u0E2D\u0E40\u0E2A\u0E19\u0E2D\u0E41\u0E19\u0E30", badge: openFeedbackCount }, { id: "notiflog", ic: NAV_ICONS.notiflog, lb: "LINE Log" }, { id: "reports", ic: NAV_ICONS.reports, lb: "\u0E23\u0E32\u0E22\u0E07\u0E32\u0E19" }, { id: "settings", ic: NAV_ICONS.settings, lb: "\u0E15\u0E31\u0E49\u0E07\u0E04\u0E48\u0E32" }, { id: "staffmgmt", ic: NAV_ICONS.staffmgmt, lb: "\u0E17\u0E35\u0E21\u0E07\u0E32\u0E19" }];
   const STAFF_NAV = [{ id: "attend", ic: NAV_ICONS.attend, lb: "\u0E40\u0E02\u0E49\u0E32\u0E23\u0E48\u0E27\u0E21" }, { id: "kiosk", ic: NAV_ICONS.kiosk, lb: "Kiosk" }, { id: "walkin", ic: NAV_ICONS.walkin, lb: "Walk-in", badge: pendingGuestCount }, { id: "members", ic: NAV_ICONS.members, lb: "\u0E2A\u0E21\u0E32\u0E0A\u0E34\u0E01" }, { id: "expiring", ic: NAV_ICONS.expiring, lb: "\u0E43\u0E01\u0E25\u0E49\u0E2B\u0E21\u0E14", badge: expiringCount }, { id: "adminfeedback", ic: NAV_ICONS.feedback, lb: "\u0E02\u0E49\u0E2D\u0E40\u0E2A\u0E19\u0E2D\u0E41\u0E19\u0E30", badge: openFeedbackCount }];
   const ADMIN_NAV = isOwner ? OWNER_NAV : STAFF_NAV;
   const NAV = isAdmin ? ADMIN_NAV : USER_NAV;
@@ -3883,7 +3800,7 @@ const unreadCount = useMemo(() => cur ? (notifications || []).filter((n) => n.mi
           React.createElement("option", { value: "ko" }, "🇰🇷 한국어"),
           React.createElement("option", { value: "ja" }, "🇯🇵 日本語")
         ),
-        /* @__PURE__ */ React.createElement(ThemeToggle, { dark, toggle: toggleTheme, style: { padding: "4px 8px", fontSize: 11 } }), /* @__PURE__ */ React.createElement("button", { onClick: logout, style: { background: C2.surf, border: `1px solid ${C2.border}`, borderRadius: 9, padding: "5px 10px", color: C2.muted, fontSize: 12, cursor: "pointer", fontFamily: FONT } }, "\u0E2D\u0E2D\u0E01")))), /* @__PURE__ */ React.createElement("div", { style: { padding: "14px 14px", paddingBottom: 90, minHeight: "calc(100vh - 56px)" } }, isAdmin ? /* @__PURE__ */ React.createElement(React.Fragment, null, view === "overview" && /* @__PURE__ */ React.createElement(AdminDashboard, { members, sessions, classes, guestBookings }), view === "attend" && /* @__PURE__ */ React.createElement(AdminAttendance, { sessions, members, guestBookings, onMark: markAtt, onPromoteWL: promoteWL, onAdminCancel: adminCancel, postAction, showToast }), view === "kiosk" && /* @__PURE__ */ React.createElement(KioskView, { members, sessions, onKioskBook: kioskBook, onKioskCheckin: kioskCheckin, showToast }), view === "walkin" && /* @__PURE__ */ React.createElement(AdminWalkIn, { guestBookings, onConfirm: confirmGuestPayment, showToast }), view === "members" && /* @__PURE__ */ React.createElement(AdminMembers, { members, sessions, settings, onSaveMember: saveMember, onUnlockDevice: unlockDevice, showToast, onUpdatePhone: updateMemberPhone, onKioskBook: kioskBook }), view === "expiring" && /* @__PURE__ */ React.createElement(AdminExpiringMembers, { members }), view === "adminfeedback" && /* @__PURE__ */ React.createElement(AdminFeedback, { feedback, onResolve: resolveFeedback, showToast }), view === "notiflog" && /* @__PURE__ */ React.createElement(AdminNotifLog, { notifications, members, checkinLog, onSeen: markNotifLogSeen }), view === "reports" && /* @__PURE__ */ React.createElement(AdminReports, { sessions, members, classes, showToast, postAction }), view === "settings" && /* @__PURE__ */ React.createElement(AdminSettings, { settings, onSave: saveSettings, members, onUnlockDevice: unlockDevice, showToast, onUploadImage: uploadImage, postAction, etiquetteRules, onSaveEtiquette: saveEtiquette }), view === "staffmgmt" && /* @__PURE__ */ React.createElement(AdminStaffManagement, { staff, postAction, showToast })) : /* @__PURE__ */ React.createElement(React.Fragment, null, view === "schedule" && /* @__PURE__ */ React.createElement(ScheduleView, { sessions, member: cur, settings, onBook: book, onWaitlist: joinWL, onCancel: cancel, onCancelWL: cancelWL, onToggleWlOptIn: toggleWlOptIn }), view === "myBookings" && /* @__PURE__ */ React.createElement(MyBookingsView, { sessions, member: cur, settings, onCancel: cancel, onCancelWL: cancelWL, onCheckin: checkin, pendingWL, onConfirmWL: confirmWLSpot, onDeclineWL: declineWLSpot }), view === "checkin" && /* @__PURE__ */ React.createElement(CheckinView, { sessions, member: cur, settings, onCheckin: checkin }), view === "notifs" && /* @__PURE__ */ React.createElement(NotificationsView, { notifications, member: cur, onRead: markNotifRead }), view === "feedback" && /* @__PURE__ */ React.createElement(FeedbackView, { member: cur, feedback, onSubmit: submitFeedback, showToast, etiquetteRules }), view === "profile" && /* @__PURE__ */ React.createElement(ProfileView, { member: cur, sessions, settings, onUploadPhoto: uploadMemberPhoto, onToggleWlOptIn: toggleWlOptIn }))), /* @__PURE__ */ React.createElement("div", { className: "apex-nav", style: { position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 440, background: C2.surf, borderTop: `1px solid ${C2.border}`, padding: "8px 0 18px", display: "flex", justifyContent: "space-around", alignItems: "flex-end", zIndex: 50 } },
+        /* @__PURE__ */ React.createElement(ThemeToggle, { dark, toggle: toggleTheme, style: { padding: "4px 8px", fontSize: 11 } }), /* @__PURE__ */ React.createElement("button", { onClick: logout, style: { background: C2.surf, border: `1px solid ${C2.border}`, borderRadius: 9, padding: "5px 10px", color: C2.muted, fontSize: 12, cursor: "pointer", fontFamily: FONT } }, "\u0E2D\u0E2D\u0E01")))), /* @__PURE__ */ React.createElement("div", { style: { padding: "14px 14px", paddingBottom: 90, minHeight: "calc(100vh - 56px)" } }, isAdmin ? /* @__PURE__ */ React.createElement(React.Fragment, null, view === "overview" && /* @__PURE__ */ React.createElement(AdminDashboard, { members, sessions, classes, guestBookings }), view === "attend" && /* @__PURE__ */ React.createElement(AdminAttendance, { sessions, members, guestBookings, onMark: markAtt, onPromoteWL: promoteWL, onAdminCancel: adminCancel, postAction, showToast }), view === "kiosk" && /* @__PURE__ */ React.createElement(KioskView, { members, sessions, onKioskBook: kioskBook, onKioskCheckin: kioskCheckin, showToast }), view === "walkin" && /* @__PURE__ */ React.createElement(AdminWalkIn, { guestBookings, onConfirm: confirmGuestPayment, showToast }), view === "members" && /* @__PURE__ */ React.createElement(AdminMembers, { members, sessions, settings, onSaveMember: saveMember, onUnlockDevice: unlockDevice, showToast, onUpdatePhone: updateMemberPhone, onKioskBook: kioskBook }), view === "expiring" && /* @__PURE__ */ React.createElement(AdminExpiringMembers, { members }), view === "adminfeedback" && /* @__PURE__ */ React.createElement(AdminFeedback, { feedback, onResolve: resolveFeedback, showToast }), view === "notiflog" && /* @__PURE__ */ React.createElement(AdminNotifLog, { notifications, members }), view === "reports" && /* @__PURE__ */ React.createElement(AdminReports, { sessions, members, classes, showToast, postAction }), view === "settings" && /* @__PURE__ */ React.createElement(AdminSettings, { settings, onSave: saveSettings, members, onUnlockDevice: unlockDevice, showToast, onUploadImage: uploadImage, postAction, etiquetteRules, onSaveEtiquette: saveEtiquette }), view === "staffmgmt" && /* @__PURE__ */ React.createElement(AdminStaffManagement, { staff, postAction, showToast })) : /* @__PURE__ */ React.createElement(React.Fragment, null, view === "schedule" && /* @__PURE__ */ React.createElement(ScheduleView, { sessions, member: cur, settings, onBook: book, onWaitlist: joinWL, onCancel: cancel, onCancelWL: cancelWL, onToggleWlOptIn: toggleWlOptIn }), view === "myBookings" && /* @__PURE__ */ React.createElement(MyBookingsView, { sessions, member: cur, settings, onCancel: cancel, onCancelWL: cancelWL, onCheckin: checkin, pendingWL, onConfirmWL: confirmWLSpot, onDeclineWL: declineWLSpot }), view === "checkin" && /* @__PURE__ */ React.createElement(CheckinView, { sessions, member: cur, settings, onCheckin: checkin }), view === "notifs" && /* @__PURE__ */ React.createElement(NotificationsView, { notifications, member: cur, onRead: markNotifRead }), view === "feedback" && /* @__PURE__ */ React.createElement(FeedbackView, { member: cur, feedback, onSubmit: submitFeedback, showToast, etiquetteRules }), view === "profile" && /* @__PURE__ */ React.createElement(ProfileView, { member: cur, sessions, settings, onUploadPhoto: uploadMemberPhoto, onToggleWlOptIn: toggleWlOptIn }))), /* @__PURE__ */ React.createElement("div", { className: "apex-nav", style: { position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 440, background: C2.surf, borderTop: `1px solid ${C2.border}`, padding: "8px 0 18px", display: "flex", justifyContent: "space-around", alignItems: "flex-end", zIndex: 50 } },
     isAdmin ? (() => {
       const PRIMARY = NAV.slice(0, 4);
       const MORE = NAV.slice(4);
@@ -3908,27 +3825,4 @@ const unreadCount = useMemo(() => cur ? (notifications || []).filter((n) => n.mi
           ),
           (showAdminMore || moreActive) && /* @__PURE__ */ React.createElement("span", { style: { fontSize: 10, fontWeight: 800, marginTop: 1, whiteSpace: "nowrap" } }, "\u0E40\u0E1E\u0E34\u0E48\u0E21\u0E40\u0E15\u0E34\u0E21"),
           showAdminMore && /* @__PURE__ */ React.createElement("div", { style: { position: "absolute", bottom: "calc(100% + 8px)", right: -8, background: C2.surf, border: `1px solid ${C2.border}`, borderRadius: 14, padding: 8, minWidth: 190, boxShadow: "0 -6px 24px rgba(0,0,0,.25)", zIndex: 200 } },
-            MORE.map((n) => /* @__PURE__ */ React.createElement("button", { key: n.id, onClick: (ev) => { ev.stopPropagation(); setView(n.id); setShowAdminMore(false); }, style: { width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", background: view === n.id ? C2.orange + "18" : "none", border: "none", borderRadius: 10, color: view === n.id ? C2.orange : C2.text, cursor: "pointer", fontFamily: FONT, fontSize: 13, fontWeight: view === n.id ? 700 : 500, textAlign: "left" } },
-              /* @__PURE__ */ React.createElement("span", { dangerouslySetInnerHTML: { __html: n.ic }, style: { width: 20, height: 20, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 } }),
-              n.lb,
-              n.badge > 0 && /* @__PURE__ */ React.createElement("span", { style: { marginLeft: "auto", background: C2.red, color: "#fff", fontSize: 9, fontWeight: 800, minWidth: 16, height: 16, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 3px" } }, n.badge)
-            ))
-          )
-        ),
-      ];
-    })() : NAV.map((n) => /* @__PURE__ */ React.createElement("button", { key: n.id, onClick: () => setView(n.id), style: { display: "flex", flexDirection: "column", alignItems: "center", gap: 2, background: view === n.id ? C2.orange + "18" : "none", border: "none", cursor: "pointer", flex: "1 1 0", padding: view === n.id ? "6px 8px 4px" : "6px 4px 4px", borderRadius: 12, color: view === n.id ? C2.orange : C2.muted, position: "relative", fontFamily: FONT, transition: "all .15s" } },
-      /* @__PURE__ */ React.createElement("div", { style: { position: "relative" } },
-        /* @__PURE__ */ React.createElement("span", { dangerouslySetInnerHTML: { __html: n.ic }, style: { width: 22, height: 22, display: "flex", alignItems: "center", justifyContent: "center" } }),
-        n.badge > 0 && /* @__PURE__ */ React.createElement("span", { style: { position: "absolute", top: -4, right: -8, background: C2.red, color: "#fff", fontSize: 9, fontWeight: 800, minWidth: 16, height: 16, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 3px" } }, n.badge)
-      ),
-      view === n.id && /* @__PURE__ */ React.createElement("span", { style: { fontSize: 10, fontWeight: 800, marginTop: 1, whiteSpace: "nowrap" } }, t(n.id))
-    ))));
-}
-ReactDOM.createRoot(document.getElementById("root")).render(/* @__PURE__ */ React.createElement(App));
-requestAnimationFrame(() => requestAnimationFrame(() => {
-  const _s = document.getElementById("splash");
-  if (_s) _s.classList.add("hidden");
-}));
-  </script>
-</body>
-</html>
+            MORE.map((n) => /* @__PURE__ */ React.createElement("button", { key: n.id, onClick: (ev) => { ev.st
