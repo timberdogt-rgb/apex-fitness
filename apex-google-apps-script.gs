@@ -1717,7 +1717,7 @@ function notify(mid, type, title, body) {
 // 🚫 No-show อัตโนมัติ: ตรวจหลังคลาสจบ 15-120 นาที
 // รัน hourly — ถ้า booked แต่ยังไม่ checkin → noshow + penalty
 // ════════════════════════════════════════════════════════
-function checkAndMarkNoShows() {
+function checkNoShows() {
   var now = new Date();
   var sessions = readSheet(SHEETS.SESSIONS);
   var classMap = {};
@@ -1749,7 +1749,7 @@ function checkAndMarkNoShows() {
       marked++;
     });
   });
-  Logger.log("✅ checkAndMarkNoShows: " + marked + " no-shows marked");
+  Logger.log("✅ checkNoShows: " + marked + " no-shows marked");
 }
 
 // ════════════════════════════════════════════════════════
@@ -1760,9 +1760,9 @@ function setupTriggers() {
   ScriptApp.newTrigger("generateSessionsForNext14Days").timeBased().everyDays(1).atHour(0).create();
   ScriptApp.newTrigger("sendDailyAdminSummary").timeBased().everyDays(1).atHour(20).create();
   ScriptApp.newTrigger("sendExpiryReminders").timeBased().everyDays(1).atHour(9).create();
-  ScriptApp.newTrigger("checkAndMarkNoShows").timeBased().everyHours(1).create();
+  ScriptApp.newTrigger("checkNoShows").timeBased().everyHours(1).create();
   Logger.log("✅ Triggers setup done");
-  try { SpreadsheetApp.getUi().alert("✅ ตั้ง Triggers สำเร็จ!\n(รวม checkAndMarkNoShows รันทุก 1 ชม.)"); } catch(e) {}
+  try { SpreadsheetApp.getUi().alert("✅ ตั้ง Triggers สำเร็จ!\n(รวม checkNoShows รันทุก 1 ชม.)"); } catch(e) {}
 }
 
 // ════════════════════════════════════════════════════════
