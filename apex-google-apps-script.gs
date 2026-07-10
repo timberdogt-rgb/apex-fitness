@@ -50,7 +50,6 @@ var SHEETS = {
   FEEDBACK:       "Feedback",
   STAFF:          "Staff",
   ETIQUETTE:      "Etiquette",
-  CHECKIN_LOG:    "CheckinLog",  // [v4.3] บันทึกเช็คอิน + no-show + แจ้งเตือน
 };
 
 // ════════════════════════════════════════════════════════
@@ -247,7 +246,6 @@ function setupSheets() {
   defs[SHEETS.APPDATA]        = ["key","value"];
   defs[SHEETS.GUEST_BOOKINGS] = ["id","name","phone","sessionId","className","classDate","classTime","amount","slipUrl","status","createdAt","confirmedBy","confirmedAt"];
   defs[SHEETS.FEEDBACK]       = ["id","memberId","memberName","type","message","status","createdAt","response","respondedAt"];
-  defs[SHEETS.CHECKIN_LOG]   = ["id","type","sessionId","className","classTime","classDate","memberId","memberName","markedAt","notifiedViaLine"];
 
   Object.keys(defs).forEach(function(name) {
     var sh = ss.getSheetByName(name);
@@ -385,6 +383,10 @@ function fixSessionsTextFormat() {
 }
 
 function generateSessionsForNext14Days() {
+  // ป้องกัน race condition กับ handleBook (ที่ใช้ withLock)
+  var _lock = LockService.getScriptLock();
+  if (!_lock.tryLock(200)) { Logger.log("generateSessions: skipped (locked)"); return; }
+  try {
   var classes = readSheet(SHEETS.CLASSES).filter(function(c){
     return c.active === true || String(c.active).toUpperCase() === "TRUE";
   });
@@ -413,6 +415,7 @@ function generateSessionsForNext14Days() {
     });
   }
   Logger.log("✅ Sessions generated: " + added + " new sessions");
+  } finally { _lock.releaseLock(); }
 }
 
 // ════════════════════════════════════════════════════════
@@ -425,7 +428,6 @@ function doGet(e) {
     if (action === "getData")          return json(handleGetData(e.parameter.key));
     if (action === "login")            return json(handleLogin(e.parameter.phone, e.parameter.pin, e.parameter.deviceId));
     if (action === "getSessionBookings") return json(handleGetSessionBookings(e.parameter.sessionId));  // ✅ [v4.2]
-    if (action === "getCheckinLog")      return json({ ok:true, logs: getCheckinLogRecent() });          // ✅ [v4.3]
     return json({ error: "Unknown GET action: " + action });
   } catch(err) { return json({ error: err.toString() }); }
 }
@@ -521,14 +523,7 @@ function getAllData() {
   return {
     members:       readSheet(SHEETS.MEMBERS),
     classes:       classes,
-    sessions:      readSheet(SHEETS.SESSIONS).map(function(s) {
-      // date cells from getValues() are Date objects (UTC) — format as Bangkok local date string
-      // so frontend can build correct session IDs (e.g. "c5_2026-06-30" not "c5_2026-06-29")
-      if (s.date instanceof Date) {
-        s.date = Utilities.formatDate(s.date, "GMT+7", "yyyy-MM-dd");
-      }
-      return s;
-    }),
+    sessions:      readSheet(SHEETS.SESSIONS),
     bookings:      readSheet(SHEETS.BOOKINGS),
     attendance:    readSheet(SHEETS.ATTENDANCE),
     notifications: readSheet(SHEETS.NOTIFICATIONS).map(function(n) {
@@ -548,7 +543,6 @@ function getAllData() {
     feedback:      readSheet(SHEETS.FEEDBACK),
     staff:         readStaffList(),
     etiquetteRules: readEtiquetteRules(),
-    checkinLog:    getCheckinLogRecent(),  // [v4.3] ย้อนหลัง 7 วัน
   };
 }
 
@@ -1215,125 +1209,6 @@ function handleResolveFeedback(d) {
 }
 
 // ════════════════════════════════════════════════════════
-// ════════════════════════════════════════════════════════
-// 📋 [v4.3] CHECKIN LOG — บันทึกเช็คอิน/no-show + แจ้งเตือน Admin
-// ════════════════════════════════════════════════════════
-
-// ดึงข้อมูลคลาสจาก sessionId (format: classId_YYYY-MM-DD)
-function getClassInfoFromSession(sid) {
-  var m = String(sid||"").match(/^(.+)_(\d{4}-\d{2}-\d{2})$/);
-  if (!m) return { classId:"", name:sid, time:"", date:"" };
-  var classId = m[1], date = m[2];
-  var classes = readSheet(SHEETS.CLASSES);
-  var cls = null;
-  for (var i=0; i<classes.length; i++) { if (String(classes[i].id)===classId) { cls=classes[i]; break; } }
-  return { classId:classId, name: cls?cls.name:classId, time: cls?cls.time:"", date:date };
-}
-
-// บันทึกเหตุการณ์เช็คอิน / no-show ลง CheckinLog sheet
-function logCheckinEvent(type, sid, className, classTime, classDate, memberId, memberName, notifiedLine) {
-  try {
-    var sh = getSheet(SHEETS.CHECKIN_LOG);
-    var id = "CL" + new Date().getTime() + Math.floor(Math.random()*1000);
-    var now = Utilities.formatDate(new Date(), "GMT+7", "yyyy-MM-dd'T'HH:mm:ss");
-    sh.appendRow([id, type, sid, className||"", classTime||"", classDate||"", memberId||"", memberName||"", now, notifiedLine?"TRUE":"FALSE"]);
-  } catch(e) { Logger.log("logCheckinEvent error: "+e); }
-}
-
-// ดึง CheckinLog ย้อนหลัง 7 วัน
-function getCheckinLogRecent() {
-  try {
-    var bkk7 = new Date(new Date().getTime() + 7*3600*1000);
-    var cutoff = new Date(bkk7.getTime() - 7*86400*1000).toISOString().slice(0,10);
-    var rows = readSheet(SHEETS.CHECKIN_LOG);
-    return rows.filter(function(r){ return String(r.markedAt||"").slice(0,10) >= cutoff; })
-               .sort(function(a,b){ return String(b.markedAt).localeCompare(String(a.markedAt)); })
-               .slice(0,200);
-  } catch(e) { return []; }
-}
-
-// ════════════════════════════════════════════════════════
-// ⏰ [v4.3] NO-SHOW TRIGGER — รันทุก 15 นาที ตรวจคลาสที่เริ่ม +15 นาที
-// ════════════════════════════════════════════════════════
-
-// ตั้ง trigger อัตโนมัติ — รันฟังก์ชันนี้ครั้งเดียวจาก GAS editor
-function setupCheckinLogTrigger() {
-  // ลบ trigger เก่าของ checkNoShows
-  ScriptApp.getProjectTriggers().forEach(function(t) {
-    if (t.getHandlerFunction() === "checkNoShows") ScriptApp.deleteTrigger(t);
-  });
-  ScriptApp.newTrigger("checkNoShows").timeBased().everyMinutes(15).create();
-  Logger.log("✅ checkNoShows trigger ตั้งแล้ว (ทุก 15 นาที)");
-}
-
-// ฟังก์ชันหลัก — ถูกเรียกทุก 15 นาทีจาก trigger
-function checkNoShows() {
-  try {
-    var now = new Date(new Date().getTime() + 7*3600*1000); // Bangkok time
-    var todayStr = Utilities.formatDate(now, "GMT+7", "yyyy-MM-dd");
-    var nowMin = now.getHours()*60 + now.getMinutes();
-
-    var classes  = readSheet(SHEETS.CLASSES).filter(function(c){ return c.active!=="FALSE"&&c.active!==false; });
-    var bookings = readSheet(SHEETS.BOOKINGS);
-    var attRows  = readSheet(SHEETS.ATTENDANCE);
-    var members  = readSheet(SHEETS.MEMBERS);
-    var clLog    = readSheet(SHEETS.CHECKIN_LOG);
-
-    // index: sessionId → true (already notified no-show)
-    var alreadyChecked = {};
-    clLog.forEach(function(r){ if(r.type==="noshow_alert") alreadyChecked[r.sessionId]=true; });
-
-    classes.forEach(function(cls) {
-      if (!cls.time) return;
-      var parts = cls.time.match(/^(\d{1,2}):(\d{2})/);
-      if (!parts) return;
-      var classMin = parseInt(parts[1])*60 + parseInt(parts[2]);
-      var diffMin  = nowMin - classMin;
-      // เฉพาะคลาสที่เริ่มไป 10-25 นาทีแล้ว (window ±7.5 min รอบ 15 min mark)
-      if (diffMin < 10 || diffMin > 25) return;
-
-      var sid = cls.id + "_" + todayStr;
-      if (alreadyChecked[sid]) return; // แจ้งแล้ว ข้าม
-
-      // หาสมาชิกที่จองแต่ยังไม่เช็คอิน
-      var booked = bookings.filter(function(b){ return b.sessionId===sid && (b.type==="main"||!b.type); });
-      if (booked.length === 0) return;
-
-      var attPresent = {};
-      attRows.forEach(function(a){ if(a.sessionId===sid && a.status==="present") attPresent[a.memberId]=true; });
-
-      var noShows = booked.filter(function(b){ return !attPresent[b.memberId]; });
-      if (noShows.length === 0) return;
-
-      // สร้างรายชื่อ
-      var names = noShows.map(function(b){
-        var m = null;
-        for(var i=0;i<members.length;i++){ if(members[i].id===b.memberId){m=members[i];break;} }
-        return m ? m.name : b.memberId;
-      });
-
-      var msg = "⏰ ยังไม่เช็คอิน (" + cls.time + " " + cls.name + ")\n" +
-                "📋 " + noShows.length + " คน: " + names.slice(0,5).join(", ") +
-                (names.length>5 ? " ..." : "");
-
-      // แจ้ง admin ทาง LINE
-      notifyAdmin(msg);
-
-      // บันทึกลง CheckinLog (type=noshow_alert รวม)
-      logCheckinEvent("noshow_alert", sid, cls.name, cls.time, todayStr, "", names.join(","), true);
-
-      // บันทึกแยกรายคน
-      noShows.forEach(function(b){
-        var m = null;
-        for(var i=0;i<members.length;i++){ if(members[i].id===b.memberId){m=members[i];break;} }
-        logCheckinEvent("noshow", sid, cls.name, cls.time, todayStr, b.memberId, m?m.name:b.memberId, false);
-      });
-
-      Logger.log("[checkNoShows] " + cls.name + " " + cls.time + " → " + noShows.length + " no-show");
-    });
-  } catch(e) { Logger.log("checkNoShows error: "+e); }
-}
-
 function handleCheckin(d) {
   // ── Geofence check (100 m) ──────────────────────────────────
   if (d.lat != null && d.lng != null) {
@@ -1346,14 +1221,6 @@ function handleCheckin(d) {
     }
   }
   upsertAttendance(d.sessionId, d.memberId, "present");
-  // [v4.3] แจ้ง admin เมื่อสมาชิก self-checkin
-  try {
-    var m = readSheet(SHEETS.MEMBERS).filter(function(x){ return x.id===d.memberId; })[0];
-    var ci = getClassInfoFromSession(d.sessionId);
-    var memberName = m ? m.name : d.memberId;
-    notifyAdmin("✅ เช็คอิน: " + memberName + "\n🏋️ " + ci.name + " " + ci.time);
-    logCheckinEvent("checkin", d.sessionId, ci.name, ci.time, ci.date, d.memberId, memberName, true);
-  } catch(e2) { Logger.log("handleCheckin notify error: "+e2); }
   return { ok:true };
 }
 function getDistanceMeters(lat1, lng1, lat2, lng2) {
@@ -1365,18 +1232,6 @@ function getDistanceMeters(lat1, lng1, lat2, lng2) {
 }
 function handleMarkAttendance(d) {
   upsertAttendance(d.sessionId, d.memberId, d.status);
-  // [v4.3] log + notify admin
-  try {
-    var ci = getClassInfoFromSession(d.sessionId);
-    var m  = readSheet(SHEETS.MEMBERS).filter(function(x){ return x.id===d.memberId; })[0];
-    var memberName = m ? m.name : d.memberId;
-    if (d.status === "present") {
-      notifyAdmin("✅ เช็คอิน (Admin): " + memberName + "\n🏋️ " + ci.name + " " + ci.time);
-      logCheckinEvent("checkin", d.sessionId, ci.name, ci.time, ci.date, d.memberId, memberName, true);
-    } else if (d.status === "noshow") {
-      logCheckinEvent("noshow", d.sessionId, ci.name, ci.time, ci.date, d.memberId, memberName, false);
-    }
-  } catch(e2) { Logger.log("handleMarkAttendance notify error: "+e2); }
   if (d.status === "noshow") { var r = incrementNoShow(d.memberId); return { ok:true, result:r }; }
   return { ok:true };
 }
@@ -1769,6 +1624,78 @@ function handleSyncAristo(d) {
 }
 
 // ════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════
+// 🔧 REPAIR: Rebuild Sessions bk/wl from Bookings Log
+// รัน 1 ครั้งใน GAS Editor เพื่อซ่อมข้อมูล session ที่ขาดหาย
+// Source of truth คือ Bookings sheet (บันทึกทุก booking ที่สำเร็จ)
+// ════════════════════════════════════════════════════════
+function repairSessionsFromBookingsLog() {
+  // Step 1: อ่าน Bookings log ทั้งหมด แล้ว group by sessionId
+  var bookings = readSheet(SHEETS.BOOKINGS);
+  var sessionBk  = {}; // sessionId → Set of memberId (main)
+  var sessionWl  = {}; // sessionId → Set of memberId (waitlist)
+
+  bookings.forEach(function(b) {
+    var sid = String(b.sessionId || "").trim();
+    var mid = String(b.memberId  || "").trim();
+    var typ = String(b.type     || "main").trim();
+    if (!sid || !mid) return;
+    if (typ === "main" || typ === "") {
+      if (!sessionBk[sid]) sessionBk[sid] = [];
+      if (sessionBk[sid].indexOf(mid) === -1) sessionBk[sid].push(mid);
+    } else if (typ === "waitlist") {
+      if (!sessionWl[sid]) sessionWl[sid] = [];
+      if (sessionWl[sid].indexOf(mid) === -1) sessionWl[sid].push(mid);
+    }
+  });
+
+  // Step 2: ลบ sessions ที่มี id ซ้ำกัน (duplicate rows) เก็บไว้แค่ row แรก
+  var sh   = getSheet(SHEETS.SESSIONS);
+  var data = sh.getDataRange().getValues();
+  var seen = {}, toDelete = [];
+  for (var i = data.length - 1; i >= 1; i--) {
+    var sid = String(data[i][0] || "").trim();
+    if (!sid) { toDelete.push(i + 1); continue; }
+    if (seen[sid]) {
+      toDelete.push(i + 1); // มี duplicate → ลบ row นี้
+    } else {
+      seen[sid] = true;
+    }
+  }
+  // ลบจากล่างขึ้นบน (ลบแล้ว row index ไม่เลื่อน)
+  toDelete.forEach(function(r) { sh.deleteRow(r); });
+  Logger.log("Deleted " + toDelete.length + " duplicate rows");
+
+  // Step 3: อัปเดต bk/wl column ของทุก session จาก Bookings log
+  var data2 = sh.getDataRange().getValues();
+  var updated = 0;
+  for (var j = 1; j < data2.length; j++) {
+    var sid2 = String(data2[j][0] || "").trim();
+    if (!sid2) continue;
+    var curBk = parseList(String(data2[j][3] || ""));
+    var curWl = parseList(String(data2[j][4] || ""));
+    var logBk = sessionBk[sid2] || [];
+    var logWl = sessionWl[sid2] || [];
+
+    // Union: เพิ่ม ID จาก log ที่ยังไม่มีใน current
+    var newBk = curBk.slice();
+    logBk.forEach(function(m){ if (newBk.indexOf(m) === -1) newBk.push(m); });
+    var newWl = curWl.slice();
+    logWl.forEach(function(m){ if (newWl.indexOf(m) === -1) newWl.push(m); });
+
+    // เขียนกลับถ้ามีการเปลี่ยนแปลง
+    if (newBk.join(",") !== curBk.join(",") || newWl.join(",") !== curWl.join(",")) {
+      setTextValue(sh, j + 1, 4, newBk.join(","));
+      setTextValue(sh, j + 1, 5, newWl.join(","));
+      Logger.log("Repaired " + sid2 + ": bk " + curBk.length + "→" + newBk.length + ", wl " + curWl.length + "→" + newWl.length);
+      updated++;
+    }
+  }
+  Logger.log("✅ repairSessionsFromBookingsLog: " + updated + " sessions updated");
+  try { SpreadsheetApp.getUi().alert("✅ ซ่อมสำเร็จ!\nลบ row ซ้ำ: " + toDelete.length + "\nอัปเดต session: " + updated); } catch(e) {}
+  return { ok: true, deletedDuplicates: toDelete.length, updatedSessions: updated };
+}
+
 // ⚙️ UTILITIES
 // ════════════════════════════════════════════════════════
 function appendBooking(sid, mid, type) {
@@ -1787,6 +1714,45 @@ function notify(mid, type, title, body) {
 }
 
 // ════════════════════════════════════════════════════════
+// 🚫 No-show อัตโนมัติ: ตรวจหลังคลาสจบ 15-120 นาที
+// รัน hourly — ถ้า booked แต่ยังไม่ checkin → noshow + penalty
+// ════════════════════════════════════════════════════════
+function checkAndMarkNoShows() {
+  var now = new Date();
+  var sessions = readSheet(SHEETS.SESSIONS);
+  var classMap = {};
+  readSheet(SHEETS.CLASSES).forEach(function(c){ if (c.id) classMap[c.id] = c; });
+  // Build attendance map: "sessionId|memberId" → status
+  var attMap = {};
+  readSheet(SHEETS.ATTENDANCE).forEach(function(a){
+    if (a.sessionId && a.memberId) attMap[String(a.sessionId) + "|" + String(a.memberId)] = a.status;
+  });
+  var marked = 0;
+  sessions.forEach(function(s) {
+    var cls = classMap[s.classId];
+    if (!cls) return;
+    var dur = parseInt(cls.duration || 60);
+    var sessionStart = getSessionDateTime(s.date, cls.time || "00:00");
+    var sessionEnd = new Date(sessionStart.getTime() + dur * 60000);
+    var minsAfterEnd = (now - sessionEnd) / 60000;
+    // เฉพาะ session ที่จบไปแล้ว 15-120 นาที (ป้องกัน double-count)
+    if (minsAfterEnd < 15 || minsAfterEnd > 120) return;
+    var bk = parseList(s.bookings);
+    bk.forEach(function(mid) {
+      if (!mid) return;
+      var key = String(s.id) + "|" + String(mid);
+      var status = attMap[key];
+      if (status === "present" || status === "noshow") return; // จัดการแล้ว
+      upsertAttendance(s.id, mid, "noshow");
+      incrementNoShow(mid);
+      Logger.log("🚫 No-show auto: session=" + s.id + " member=" + mid);
+      marked++;
+    });
+  });
+  Logger.log("✅ checkAndMarkNoShows: " + marked + " no-shows marked");
+}
+
+// ════════════════════════════════════════════════════════
 // ⏰ ตั้ง Time Triggers
 // ════════════════════════════════════════════════════════
 function setupTriggers() {
@@ -1794,8 +1760,9 @@ function setupTriggers() {
   ScriptApp.newTrigger("generateSessionsForNext14Days").timeBased().everyDays(1).atHour(0).create();
   ScriptApp.newTrigger("sendDailyAdminSummary").timeBased().everyDays(1).atHour(20).create();
   ScriptApp.newTrigger("sendExpiryReminders").timeBased().everyDays(1).atHour(9).create();
+  ScriptApp.newTrigger("checkAndMarkNoShows").timeBased().everyHours(1).create();
   Logger.log("✅ Triggers setup done");
-  try { SpreadsheetApp.getUi().alert("✅ ตั้ง Triggers สำเร็จ!"); } catch(e) {}
+  try { SpreadsheetApp.getUi().alert("✅ ตั้ง Triggers สำเร็จ!\n(รวม checkAndMarkNoShows รันทุก 1 ชม.)"); } catch(e) {}
 }
 
 // ════════════════════════════════════════════════════════
@@ -1922,4 +1889,46 @@ function handleUpdateMemberPhone(d) {
 // ⏰ [v4.4] PRE-CLASS REMINDER
 // sendPreClassReminders() — ให้ Time Trigger เรียกทุก 1 ชั่วโมง
 // POST { action:"setupReminderTrigger", hoursBefore:2 }  — ตั้งหรืออัปเดต trigger
-// ═══════════════════════════════════════════════════�
+// ════════════════════════════════════════════════════════
+function sendPreClassReminders() {
+  var settings = readSettingsObj();
+  var hours = parseInt(settings.reminderHoursBefore || "2", 10);
+  if (isNaN(hours) || hours < 1) return;
+
+  var now    = new Date();
+  var target = new Date(now.getTime() + hours * 3600 * 1000);
+  var targetDate = Utilities.formatDate(target, "GMT+7", "yyyy-MM-dd");
+  var targetHour = parseInt(Utilities.formatDate(target, "GMT+7", "HH"), 10);
+
+  var classes = readSheet(SHEETS.CLASSES).filter(function(c){ return c.active; });
+  var allMembers = readSheet(SHEETS.MEMBERS);
+  var memberMap = {};
+  allMembers.forEach(function(m){ memberMap[m.id] = m; });
+
+  classes.forEach(function(cls) {
+    var sid = cls.id + "_" + targetDate;
+    var clsHour = parseInt((cls.time || cls.t || "00:00").split(":")[0], 10);
+    if (clsHour !== targetHour) return;
+    var found = findSessionRow(sid);
+    if (!found) return;
+    var bk = parseList(found.data[3]);
+    bk.forEach(function(mid) {
+      var member = memberMap[mid];
+      if (!member || !member.lineUserId) return;
+      var msg = "🔔 แจ้งเตือนคลาส: " + cls.name + "\n📅 วันที่: " + targetDate + "\n⏰ เวลา: " + (cls.time || cls.t) + " น.\nโปรดมาตรงเวลา 💪";
+      try { sendLineMessage(member.lineUserId, msg); } catch(e) {}
+    });
+  });
+}
+
+function handleSetupReminderTrigger(d) {
+  var hours = parseInt(d.hoursBefore || "2", 10);
+  if (isNaN(hours) || hours < 1) hours = 2;
+  ScriptApp.getProjectTriggers().filter(function(t){ return t.getHandlerFunction() === "sendPreClassReminders"; })
+    .forEach(function(t){ ScriptApp.deleteTrigger(t); });
+  ScriptApp.newTrigger("sendPreClassReminders").timeBased().everyHours(1).create();
+  var settings = readSettingsObj();
+  settings.reminderHoursBefore = String(hours);
+  saveSettingsObj(settings);
+  return { ok: true, hoursBefore: hours };
+}
