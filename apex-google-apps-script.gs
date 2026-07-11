@@ -526,9 +526,36 @@ function getAllData() {
     sessions:      readSheet(SHEETS.SESSIONS),
     bookings:      readSheet(SHEETS.BOOKINGS),
     attendance:    readSheet(SHEETS.ATTENDANCE),
+    checkinLog:    (function() {
+      var att = readSheet(SHEETS.ATTENDANCE);
+      var sessAll = readSheet(SHEETS.SESSIONS);
+      var clsAll = classes;
+      var memAll = readSheet(SHEETS.MEMBERS);
+      var sessById = {}; sessAll.forEach(function(s){ sessById[s.id] = s; });
+      var clsById = {}; clsAll.forEach(function(c){ clsById[c.id] = c; });
+      var memById = {}; memAll.forEach(function(m){ memById[m.id] = m; });
+      return att.filter(function(a){ return a.status === "present" || a.status === "noshow"; })
+        .map(function(a) {
+          var sess = sessById[a.sessionId];
+          var cls2 = sess ? clsById[sess.classId] : null;
+          var mem = memById[a.memberId];
+          var markedAt = a.markedAt instanceof Date ? a.markedAt.toISOString() : String(a.markedAt||"");
+          return {
+            type: a.status === "present" ? "checkin" : "noshow",
+            memberId: a.memberId,
+            memberName: mem ? mem.name : "",
+            className: cls2 ? cls2.name : "",
+            classTime: cls2 ? formatTimeValue(cls2.time) : "",
+            markedAt: markedAt,
+            notifiedViaLine: (mem && mem.lineUserId) ? "TRUE" : "FALSE"
+          };
+        })
+        .sort(function(x,y){ return String(y.markedAt).localeCompare(String(x.markedAt)); })
+        .slice(0, 300);
+    })(),
     notifications: readSheet(SHEETS.NOTIFICATIONS).map(function(n) {
       // ts may be stored as a Date cell → convert to ISO string
-      if (n.ts instanceof Date) n.ts = n.ts.toISOString();
+      if (n.timestamp instanceof Date) n.timestamp = n.timestamp.toISOString();
       return n;
     }),
     settings:      readSheet(SHEETS.SETTINGS),
@@ -957,6 +984,30 @@ function handleBook(d) {
     var found = findSessionRow(d.sessionId); if (!found) return { ok:false, error:"ไม่พบคลาส" };
     var cls = readSheet(SHEETS.CLASSES).filter(function(c){ return c.id === found.data[1]; })[0];
     if (!cls) return { ok:false, error:"ไม่พบข้อมูลคลาส" };
+
+    // ✅ [Fix 2026-07-11] Enforce no-show suspension at booking time
+    var memberRow = readSheet(SHEETS.MEMBERS).filter(function(m){ return String(m.id) === String(d.memberId); })[0];
+    if (memberRow) {
+      var isSuspended = memberRow.suspended === true || String(memberRow.suspended||"").toUpperCase() === "TRUE";
+      var untilD = String(memberRow.suspendedUntil||"").trim();
+      var todayD = Utilities.formatDate(new Date(), "GMT+7", "yyyy-MM-dd");
+      if (isSuspended && untilD && untilD >= todayD) {
+        return { ok:false, error:"บัญชีถูกระงับการจองถึงวันที่ " + untilD + " เนื่องจาก No-show เกินกำหนด" };
+      }
+      if (isSuspended && (!untilD || untilD < todayD)) {
+        var msh = getSheet(SHEETS.MEMBERS);
+        var mdata = msh.getDataRange().getValues();
+        var mheaders = mdata[0]; var mcolMap = {};
+        mheaders.forEach(function(h,i){ mcolMap[h]=i; });
+        for (var mi=1; mi<mdata.length; mi++) {
+          if (String(mdata[mi][mcolMap["id"]]) === String(d.memberId) && mcolMap["suspended"] !== undefined) {
+            msh.getRange(mi+1, mcolMap["suspended"]+1).setValue(false);
+            break;
+          }
+        }
+      }
+    }
+
     if (!d.skipWindowCheck) {
       var win = checkBookingWindow(found.data[2], cls.time);
       if (!win.ok) return win;
@@ -1240,80 +1291,196 @@ function upsertAttendance(sid, mid, status) {
   for (var i=1; i<data.length; i++) { if (data[i][0]===sid && data[i][1]===mid) { sh.getRange(i+1,3).setValue(status); sh.getRange(i+1,4).setValue(now); return; } }
   sh.appendRow([sid, mid, status, now]);
 }
-// L1/L2 No-show penalty [v4.5]
+// L1/L2 No-show penalty [v4.6 — fixed 2026-07-11]
+// Pre-L1: counts reset if 30 days pass without reaching NOSHOW_LIMIT (3)
 // L1: 3 no-shows within 30 days → suspend 7 days, penaltyLevel=1
-// L2: 1 more no-show within 90 days of first → suspend 14 days, penaltyLevel=2
-// Reset: if >90 days since noShowWindowStart, start fresh
+// L2: 3 MORE no-shows (total 6) within 90 days of original window → suspend 14 days, penaltyLevel=2
+// Suspension auto-clears once suspendedUntil has passed (checked here + at booking time)
+// Full reset: >90 days since windowStart with no further violation
 function incrementNoShow(mid) {
-  var sh = getSheet(SHEETS.MEMBERS), data = sh.getDataRange().getValues();
-  var headers = data[0];
-  var colMap = {};
-  headers.forEach(function(h, i) { colMap[h] = i; });
+  return withLock(function() {
+    var sh = getSheet(SHEETS.MEMBERS), data = sh.getDataRange().getValues();
+    var headers = data[0];
+    var colMap = {};
+    headers.forEach(function(h, i) { colMap[h] = i; });
 
-  // Auto-add missing columns
-  function ensureCol(name) {
-    if (colMap[name] === undefined) {
-      var newCol = headers.length;
-      sh.getRange(1, newCol + 1).setValue(name);
-      colMap[name] = newCol;
-      headers.push(name);
+    function ensureCol(name) {
+      if (colMap[name] === undefined) {
+        var newCol = headers.length;
+        sh.getRange(1, newCol + 1).setValue(name);
+        colMap[name] = newCol;
+        headers.push(name);
+      }
     }
-  }
-  ensureCol("penaltyLevel");
-  ensureCol("noShowWindowStart");
+    ensureCol("penaltyLevel");
+    ensureCol("noShowWindowStart");
 
-  for (var i = 1; i < data.length; i++) {
-    if (String(data[i][colMap["id"]]) !== String(mid)) continue;
+    for (var i = 1; i < data.length; i++) {
+      if (String(data[i][colMap["id"]]) !== String(mid)) continue;
 
-    var today = Utilities.formatDate(new Date(), "GMT+7", "yyyy-MM-dd");
-    var n = (Number(data[i][colMap["noShowCount"]]) || 0) + 1;
-    var windowStart = String(data[i][colMap["noShowWindowStart"]] || "").trim() || today;
-    var penaltyLevel = Number(data[i][colMap["penaltyLevel"]] || 0);
-    var suspended = String(data[i][colMap["suspended"]] || "").toUpperCase() === "TRUE";
+      var today = Utilities.formatDate(new Date(), "GMT+7", "yyyy-MM-dd");
+      var n = Number(data[i][colMap["noShowCount"]]) || 0;
+      var windowStart = String(data[i][colMap["noShowWindowStart"]] || "").trim() || today;
+      var penaltyLevel = Number(data[i][colMap["penaltyLevel"]] || 0);
+      var suspended = String(data[i][colMap["suspended"]] || "").toUpperCase() === "TRUE";
+      var suspendedUntil = String(data[i][colMap["suspendedUntil"]] || "").trim();
 
-    // Check if penalty window has expired (>90 days)
-    var ws = new Date(windowStart + "T00:00:00+07:00");
-    var td = new Date(today + "T00:00:00+07:00");
-    var daysSince = Math.floor((td - ws) / 86400000);
-    if (isNaN(daysSince) || daysSince > 90) {
-      n = 1; windowStart = today; penaltyLevel = 0; daysSince = 0;
-    }
+      // ✅ [Fix 2026-07-11] auto-clear an EXPIRED suspension so escalation can be
+      // re-evaluated normally instead of being permanently blocked by a stale flag.
+      if (suspended && suspendedUntil && suspendedUntil < today) {
+        suspended = false;
+        sh.getRange(i+1, colMap["suspended"]+1).setValue(false);
+      }
 
-    var until = new Date();
+      var ws = new Date(windowStart + "T00:00:00+07:00");
+      var td = new Date(today + "T00:00:00+07:00");
+      var daysSince = Math.floor((td - ws) / 86400000);
 
-    // L2: already at L1, another no-show within 90-day window
-    if (penaltyLevel >= 1 && daysSince <= 90 && !suspended) {
-      until.setDate(until.getDate() + 14);
-      var untilStr = Utilities.formatDate(until, "GMT+7", "yyyy-MM-dd");
+      // Full reset after 90 days of inactivity since the window started
+      if (isNaN(daysSince) || daysSince > 90) {
+        n = 0; windowStart = today; penaltyLevel = 0; daysSince = 0;
+      }
+      // ✅ [Fix 2026-07-11] Pre-L1 30-day reset — "reset ทุก 30 วัน" business rule.
+      // Only applies before the member has ever hit L1 (penaltyLevel 0).
+      else if (penaltyLevel === 0 && daysSince > 30) {
+        n = 0; windowStart = today; daysSince = 0;
+      }
+
+      n = n + 1;
+
+      var until = new Date();
+
+      // ✅ [Fix 2026-07-11] L2: 3 MORE no-shows after L1 (total 6), within 90 days
+      // of the original window — matches "no show อีก 3 ครั้ง ภายใน 90 วัน" rule.
+      if (penaltyLevel === 1 && n >= 6 && daysSince <= 90 && !suspended) {
+        until.setDate(until.getDate() + 14);
+        var untilStr = Utilities.formatDate(until, "GMT+7", "yyyy-MM-dd");
+        sh.getRange(i+1, colMap["noShowCount"]+1).setValue(n);
+        sh.getRange(i+1, colMap["penaltyLevel"]+1).setValue(2);
+        sh.getRange(i+1, colMap["suspended"]+1).setValue(true);
+        sh.getRange(i+1, colMap["suspendedUntil"]+1).setValue(untilStr);
+        sh.getRange(i+1, colMap["noShowWindowStart"]+1).setValue(windowStart);
+        notifySuspension(mid, n, untilStr);
+        return { suspended: true, noShowCount: n, until: untilStr, penaltyLevel: 2 };
+      }
+
+      // L1: 3 no-shows within 30 days
+      if (penaltyLevel === 0 && n >= 3 && daysSince <= 30 && !suspended) {
+        until.setDate(until.getDate() + 7);
+        var untilStr = Utilities.formatDate(until, "GMT+7", "yyyy-MM-dd");
+        sh.getRange(i+1, colMap["noShowCount"]+1).setValue(n);
+        sh.getRange(i+1, colMap["penaltyLevel"]+1).setValue(1);
+        sh.getRange(i+1, colMap["suspended"]+1).setValue(true);
+        sh.getRange(i+1, colMap["suspendedUntil"]+1).setValue(untilStr);
+        sh.getRange(i+1, colMap["noShowWindowStart"]+1).setValue(windowStart);
+        notifySuspension(mid, n, untilStr);
+        return { suspended: true, noShowCount: n, until: untilStr, penaltyLevel: 1 };
+      }
+
+      // Count only
       sh.getRange(i+1, colMap["noShowCount"]+1).setValue(n);
-      sh.getRange(i+1, colMap["penaltyLevel"]+1).setValue(2);
-      sh.getRange(i+1, colMap["suspended"]+1).setValue(true);
-      sh.getRange(i+1, colMap["suspendedUntil"]+1).setValue(untilStr);
       sh.getRange(i+1, colMap["noShowWindowStart"]+1).setValue(windowStart);
-      notifySuspension(mid, n, untilStr);
-      return { suspended: true, noShowCount: n, until: untilStr, penaltyLevel: 2 };
+      sh.getRange(i+1, colMap["penaltyLevel"]+1).setValue(penaltyLevel);
+      if (!suspended) notify(mid, "info", "⚠️ บันทึก No-show", "No-show ครั้งที่ " + n);
+      return { suspended: suspended, noShowCount: n, penaltyLevel: penaltyLevel };
+    }
+    return { suspended: false };
+  });
+}
+
+// ════════════════════════════════════════════════════════
+// 🕰️ [2026-07-11] ONE-TIME BACKFILL — merge legacy "CheckinLog" sheet
+// data into the new no-show system (user-requested: "รวมข้อมูลเก่าเข้ากับระบบใหม่")
+//
+// Found 19 real no-show events across 9 members that were never reflected
+// in Members.noShowCount:
+//   - 10 events existed ONLY in the old CheckinLog sheet (Attendance had no
+//     row at all for that session+member) → appended to Attendance below.
+//   - 9 events already existed in Attendance (status="noshow") but were
+//     never counted, due to the pre-2026-07-11 incrementNoShow bug.
+// Final per-member state was hand-simulated using the SAME 30/90-day,
+// L1(3→7d)/L2(6→14d) rules as incrementNoShow() above, applied in true
+// chronological event order. 3 members (947156051, 971909304, 656969366)
+// land on an active suspension as a direct, confirmed-with-user result.
+// One additional case (896933845) had a single already-forgiven no-show
+// (noShowCount reset by an admin previously, but noShowWindowStart was
+// left stale by the old reset-button bug) — left uncounted, only the
+// stale windowStart is cleared.
+//
+// Writes directly via setValue — deliberately skips the per-event "No-show
+// ครั้งที่ N" notify() spam for week-old events, but DOES send
+// notifySuspension() for the 3 members landing on an ACTIVE suspension
+// right now, since they need to know before showing up to a class.
+// Idempotent: guarded by an AppData flag so re-running is a no-op.
+// ════════════════════════════════════════════════════════
+function runNoShowBackfill_20260711() {
+  return withLock(function() {
+    var appSh = getOrCreateSheet(SHEETS.APPDATA, ["key", "value"]);
+    var appData = appSh.getDataRange().getValues();
+    for (var k = 1; k < appData.length; k++) {
+      if (String(appData[k][0]) === "noShowBackfill20260711") {
+        Logger.log("[backfill] already applied on " + appData[k][1] + " — skipping.");
+        return { ok: true, skipped: true };
+      }
     }
 
-    // L1: 3+ no-shows within 30 days
-    if (n >= 3 && daysSince <= 30 && penaltyLevel === 0 && !suspended) {
-      until.setDate(until.getDate() + 7);
-      var untilStr = Utilities.formatDate(until, "GMT+7", "yyyy-MM-dd");
-      sh.getRange(i+1, colMap["noShowCount"]+1).setValue(n);
-      sh.getRange(i+1, colMap["penaltyLevel"]+1).setValue(1);
-      sh.getRange(i+1, colMap["suspended"]+1).setValue(true);
-      sh.getRange(i+1, colMap["suspendedUntil"]+1).setValue(untilStr);
-      sh.getRange(i+1, colMap["noShowWindowStart"]+1).setValue(windowStart);
-      notifySuspension(mid, n, untilStr);
-      return { suspended: true, noShowCount: n, until: untilStr, penaltyLevel: 1 };
+    // ── 1) Append the 10 events missing from Attendance entirely ──
+    var attSh = getSheet(SHEETS.ATTENDANCE);
+    var missingAttRows = [
+      ["c12_2026-07-02", "947156051", "noshow", "2026-07-02T04:14:51.000Z"],
+      ["c12_2026-07-02", "971909304", "noshow", "2026-07-02T04:14:52.000Z"],
+      ["c12_2026-07-02", "923985959", "noshow", "2026-07-02T04:14:53.000Z"],
+      ["c12_2026-07-02", "869327424", "noshow", "2026-07-02T04:14:53.000Z"],
+      ["c12_2026-07-02", "656969366", "noshow", "2026-07-02T04:14:54.000Z"],
+      ["c10_2026-07-02", "971909304", "noshow", "2026-07-02T05:29:51.000Z"],
+      ["c10_2026-07-02", "656969366", "noshow", "2026-07-02T05:29:51.000Z"],
+      ["c4_2026-07-07",  "656969366", "noshow", "2026-07-07T11:14:51.000Z"],
+      ["c12_2026-07-09", "656969366", "noshow", "2026-07-09T11:14:53.000Z"],
+      ["c13_2026-07-10", "956975520", "noshow", "2026-07-10T12:29:52.000Z"]
+    ];
+    missingAttRows.forEach(function(r) { attSh.appendRow(r); });
+
+    // ── 2) Hand-simulated final Members state per affected member ──
+    var finalStates = {
+      "946360382": { noShowCount: 1, penaltyLevel: 0, suspended: false, suspendedUntil: "", noShowWindowStart: "2026-07-01" },
+      "875769663": { noShowCount: 1, penaltyLevel: 0, suspended: false, suspendedUntil: "", noShowWindowStart: "2026-07-01" },
+      "903254229": { noShowCount: 1, penaltyLevel: 0, suspended: false, suspendedUntil: "", noShowWindowStart: "2026-07-02" },
+      "947156051": { noShowCount: 3, penaltyLevel: 1, suspended: true,  suspendedUntil: "2026-07-13", noShowWindowStart: "2026-07-02" },
+      "869327424": { noShowCount: 2, penaltyLevel: 0, suspended: false, suspendedUntil: "", noShowWindowStart: "2026-07-02" },
+      "971909304": { noShowCount: 3, penaltyLevel: 1, suspended: true,  suspendedUntil: "2026-07-11", noShowWindowStart: "2026-07-02" },
+      "656969366": { noShowCount: 5, penaltyLevel: 1, suspended: true,  suspendedUntil: "2026-07-13", noShowWindowStart: "2026-07-02" },
+      "923985959": { noShowCount: 1, penaltyLevel: 0, suspended: false, suspendedUntil: "", noShowWindowStart: "2026-07-02" },
+      "956975520": { noShowCount: 1, penaltyLevel: 0, suspended: false, suspendedUntil: "", noShowWindowStart: "2026-07-10" }
+    };
+    var clearStaleWindowStartOnly = ["896933845"];
+
+    var msh = getSheet(SHEETS.MEMBERS);
+    var mdata = msh.getDataRange().getValues();
+    var mheaders = mdata[0];
+    var mcolMap = {};
+    mheaders.forEach(function(h, i) { mcolMap[h] = i; });
+
+    var applied = [];
+    for (var i = 1; i < mdata.length; i++) {
+      var mid = String(mdata[i][mcolMap["id"]]);
+      if (finalStates[mid]) {
+        var s = finalStates[mid];
+        msh.getRange(i + 1, mcolMap["noShowCount"] + 1).setValue(s.noShowCount);
+        msh.getRange(i + 1, mcolMap["penaltyLevel"] + 1).setValue(s.penaltyLevel);
+        msh.getRange(i + 1, mcolMap["suspended"] + 1).setValue(s.suspended);
+        msh.getRange(i + 1, mcolMap["suspendedUntil"] + 1).setValue(s.suspendedUntil);
+        msh.getRange(i + 1, mcolMap["noShowWindowStart"] + 1).setValue(s.noShowWindowStart);
+        if (s.suspended) notifySuspension(mid, s.noShowCount, s.suspendedUntil);
+        applied.push(mid);
+      } else if (clearStaleWindowStartOnly.indexOf(mid) !== -1) {
+        msh.getRange(i + 1, mcolMap["noShowWindowStart"] + 1).setValue("");
+      }
     }
 
-    // Count only
-    sh.getRange(i+1, colMap["noShowCount"]+1).setValue(n);
-    sh.getRange(i+1, colMap["noShowWindowStart"]+1).setValue(windowStart);
-    if (!suspended) notify(mid, "info", "⚠️ บันทึก No-show", "No-show ครั้งที่ " + n);
-    return { suspended: false, noShowCount: n };
-  }
-  return { suspended: false };
+    appSh.appendRow(["noShowBackfill20260711", Utilities.formatDate(new Date(), "GMT+7", "yyyy-MM-dd HH:mm:ss")]);
+    Logger.log("[backfill] applied to: " + applied.join(", "));
+    return { ok: true, applied: applied };
+  });
 }
 
 // ════════════════════════════════════════════════════════
@@ -1347,6 +1514,10 @@ function handleSaveMember(d) {
           sh.getRange(i + 1, colMap[f] + 1).setValue(d[f]);
         }
       });
+      if (Number(d.noShowCount) === 0 && (d.suspended === false || String(d.suspended).toUpperCase() === "FALSE")) {
+        if (colMap["penaltyLevel"] !== undefined) sh.getRange(i + 1, colMap["penaltyLevel"] + 1).setValue(0);
+        if (colMap["noShowWindowStart"] !== undefined) sh.getRange(i + 1, colMap["noShowWindowStart"] + 1).setValue("");
+      }
       return { ok: true, updated: true, updatedUrls: updatedUrls };
     }
   }
@@ -1806,7 +1977,7 @@ function handleConfirmWaitlistSpot(d) {
 }
 
 function handleDeclineWaitlistSpot(d) {
-  if (!d.memberId || !d.sessionId) return { ok: false, error: "ข้อมูลไม่ครบ" };
+  if (!d.memberId || !d.sessionId) return { ok:false, error:"ข้อมูลไม่ครบ" };
   return withLock(function() {
     // ลบออกจาก bk (ถ้า auto-promote ไปแล้ว)
     var found = findSessionRow(d.sessionId);
