@@ -1043,10 +1043,12 @@ function compressImage(file, maxDim = 1000, quality = 0.65) {
 }
 const thFmt = (d) => {
   if (!d) return "-";
-  if (d instanceof Date) return `${d.getDate()} ${MO[d.getMonth()]} ${d.getFullYear() + 543}`;
-  const parts = String(d).split("T")[0].split("-").map(Number);
-  if (parts.length !== 3 || parts.some((n) => Number.isNaN(n))) return "-";
-  const [y, m, day] = parts;
+  const x = new Date(d);
+  if (isNaN(x.getTime())) return "-";
+  const parts = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(x);
+  const y = parseInt(parts.find((p) => p.type === "year").value);
+  const m = parseInt(parts.find((p) => p.type === "month").value);
+  const day = parseInt(parts.find((p) => p.type === "day").value);
   return `${day} ${MO[m - 1]} ${y + 543}`;
 };
 const nowISO = () => (/* @__PURE__ */ new Date()).toISOString();
