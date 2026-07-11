@@ -1043,8 +1043,11 @@ function compressImage(file, maxDim = 1000, quality = 0.65) {
 }
 const thFmt = (d) => {
   if (!d) return "-";
-  const x = new Date(d);
-  return `${x.getDate()} ${MO[x.getMonth()]} ${x.getFullYear() + 543}`;
+  if (d instanceof Date) return `${d.getDate()} ${MO[d.getMonth()]} ${d.getFullYear() + 543}`;
+  const parts = String(d).split("T")[0].split("-").map(Number);
+  if (parts.length !== 3 || parts.some((n) => Number.isNaN(n))) return "-";
+  const [y, m, day] = parts;
+  return `${day} ${MO[m - 1]} ${y + 543}`;
 };
 const nowISO = () => (/* @__PURE__ */ new Date()).toISOString();
 // [FIX#CLASSTIME] แปลง classTime จาก Sheets Date(1899-12-30T...) → "HH:MM"
