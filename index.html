@@ -1465,7 +1465,7 @@ function LoginScreen({ onLogin, deviceId, members, onMembersUpdate, onGuestBooki
           const code6 = String(Math.floor(1e5 + Math.random() * 9e5));
           setGeneratedOTP(code6); setOtpExpiry(Date.now() + 5 * 60 * 1e3);
           setCountdown(300); setStep("otp"); setLoading(false);
-        } else if (e.code === "auth/internal-error" || e.code === "auth/network-request-failed") {
+        } else if (e.code === "auth/internal-error" || e.code === "auth/network-request-failed" || e.code === "auth/billing-not-enabled" || e.code === "auth/quota-exceeded") {
           // Network/server error → Demo OTP fallback
           console.log("Network error → Demo OTP:", e.code);
           const code6 = String(Math.floor(1e5 + Math.random() * 9e5));
