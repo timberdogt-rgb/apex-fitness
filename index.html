@@ -1356,6 +1356,57 @@ function LoginScreen({ onLogin, deviceId, members, onMembersUpdate, onGuestBooki
     return () => clearTimeout(t);
   }, [countdown]);
   const isAdmin = (p) => p === "admin" || p === "staff";
+  
+  const [loginMode, setLoginMode] = useState("otp");
+  const [password, setPassword] = useState("");
+  const [pwErr, setPwErr] = useState("");
+  const [pwLoading, setPwLoading] = useState(false);
+  const [pwMember, setPwMember] = useState(null);
+  const [newPass1, setNewPass1] = useState("");
+  const [newPass2, setNewPass2] = useState("");
+  const loginWithPassword = async () => {
+    setPwErr("");
+    if (!phone || !password) { setPwErr("กรุณากรอกเบอร์โทรและรหัสผ่าน"); return; }
+    setPwLoading(true);
+    try {
+      const r = await fetch(APPS_SCRIPT_URL, {
+        method: "POST",
+        body: JSON.stringify({ action: "loginPassword", phone, password }),
+        signal: AbortSignal.timeout(15000),
+      });
+      const d = await r.json();
+      if (!d.ok) { setPwErr(d.error || "เข้าสู่ระบบไม่สำเร็จ"); setPwLoading(false); return; }
+      if (d.mustChangePassword) {
+        setPwMember(d.member);
+        setLoginMode("force_change");
+        setPwLoading(false);
+        return;
+      }
+      onLogin({ type: "user", mid: d.member.id });
+    } catch (e) {
+      setPwErr("เชื่อมต่อระบบไม่สำเร็จ กรุณาลองใหม่");
+      setPwLoading(false);
+    }
+  };
+  const submitNewPassword = async () => {
+    setPwErr("");
+    if (newPass1.length < 4) { setPwErr("รหัสผ่านต้องมีอย่างน้อย 4 หลัก"); return; }
+    if (newPass1 !== newPass2) { setPwErr("รหัสผ่านไม่ตรงกัน"); return; }
+    setPwLoading(true);
+    try {
+      const r = await fetch(APPS_SCRIPT_URL, {
+        method: "POST",
+        body: JSON.stringify({ action: "changeMemberPassword", id: pwMember.id, newPassword: newPass1 }),
+        signal: AbortSignal.timeout(15000),
+      });
+      const d = await r.json();
+      if (!d.ok) { setPwErr(d.error || "ตั้งรหัสผ่านไม่สำเร็จ"); setPwLoading(false); return; }
+      onLogin({ type: "user", mid: pwMember.id });
+    } catch (e) {
+      setPwErr("เชื่อมต่อระบบไม่สำเร็จ กรุณาลองใหม่");
+      setPwLoading(false);
+    }
+  };
   const requestOTP = async () => {
     setErr("");
     setLoading(true);
@@ -1582,7 +1633,7 @@ function LoginScreen({ onLogin, deviceId, members, onMembersUpdate, onGuestBooki
       }, extra)
     }
   );
-  return /* @__PURE__ */ React.createElement("div", { style: { minHeight: "100vh", background: dark ? "#09090B" : "#F8FAFC", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 20, fontFamily: FONT, transition: "background .3s" } }, /* @__PURE__ */ React.createElement("div", { style: { position: "fixed", top: 16, right: 16, zIndex: 100 } }, /* @__PURE__ */ React.createElement(ThemeToggle, { dark, toggle: toggleTheme })), /* @__PURE__ */ React.createElement("div", { style: { textAlign: "center", marginBottom: 32 } }, /* @__PURE__ */ React.createElement("img", { src: dark ? LOGO_WHITE : LOGO_FULL, alt: "Apex Fitness", style: { width: 200, height: "auto", objectFit: "contain", display: "block" } }), /* @__PURE__ */ React.createElement("div", { style: { fontSize: 12, color: C2.muted, letterSpacing: 3, marginTop: 12, fontWeight: 600 } }, "\u0E23\u0E30\u0E1A\u0E1A\u0E08\u0E2D\u0E07\u0E04\u0E25\u0E32\u0E2A\u0E2D\u0E2D\u0E19\u0E44\u0E25\u0E19\u0E4C")), /* @__PURE__ */ React.createElement("div", { style: { width: "100%", maxWidth: 400 } }, /* @__PURE__ */ React.createElement("div", { style: { background: C2.surf, borderRadius: 24, padding: 28, boxShadow: dark ? "0 8px 32px rgba(0,0,0,.5)" : "0 4px 24px rgba(0,0,0,.08)", border: `1px solid ${C2.border}` } }, step === "phone" && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { style: { fontSize: 18, fontWeight: 800, color: C2.text, marginBottom: 4 } }, "\u{1F4F1} \u0E40\u0E02\u0E49\u0E32\u0E2A\u0E39\u0E48\u0E23\u0E30\u0E1A\u0E1A"), /* @__PURE__ */ React.createElement("div", { style: { fontSize: 13, color: C2.muted, marginBottom: 20 } }, "\u0E2A\u0E21\u0E32\u0E0A\u0E34\u0E01: \u0E01\u0E23\u0E2D\u0E01\u0E40\u0E1A\u0E2D\u0E23\u0E4C\u0E42\u0E17\u0E23 \u2192 \u0E23\u0E31\u0E1A OTP"), /Line\//i.test(navigator.userAgent) && /* @__PURE__ */ React.createElement("div", { style: { background: "rgba(6,199,85,.1)", border: "1px solid #06C755", borderRadius: 10, padding: "8px 12px", marginBottom: 12, fontSize: 11, color: "#06C755", lineHeight: 1.6, fontWeight: 600 } }, "\u{1F4AC} \u0E40\u0E1B\u0E34\u0E14\u0E1C\u0E48\u0E32\u0E19 LINE: \u0E23\u0E2B\u0E31\u0E2A OTP \u0E08\u0E30\u0E41\u0E2A\u0E14\u0E07\u0E1A\u0E19\u0E2B\u0E19\u0E49\u0E32\u0E08\u0E2D \u0E44\u0E21\u0E48\u0E15\u0E49\u0E2D\u0E07\u0E23\u0E2D SMS"), inp(phone, setPhone, "text", "\u0E40\u0E0A\u0E48\u0E19 0812345678 \u0E2B\u0E23\u0E37\u0E2D admin"), err && /* @__PURE__ */ React.createElement("div", { style: { color: C2.red, fontSize: 12, marginTop: 10, padding: "10px 14px", background: C2.rM, borderRadius: 10, lineHeight: 1.6 } }, "\u26A0\uFE0F ", err), /* @__PURE__ */ React.createElement("button", { onClick: requestOTP, disabled: loading || !phone, style: { width: "100%", padding: "15px 0", marginTop: 16, background: !phone || loading ? "#374151" : C2.orange, border: "none", borderRadius: 14, color: "#fff", fontWeight: 800, fontSize: 16, cursor: !phone || loading ? "default" : "pointer", fontFamily: FONT, transition: "all .2s", boxShadow: !phone || loading ? "none" : "0 4px 16px rgba(249,115,22,.4)" } }, loading ? "\u23F3 \u0E01\u0E33\u0E25\u0E31\u0E07\u0E15\u0E23\u0E27\u0E08\u0E2A\u0E2D\u0E1A..." : "\u0E16\u0E31\u0E14\u0E44\u0E1B \u2192"), /* @__PURE__ */ React.createElement("div", { style: { textAlign: "center", marginTop: 14, fontSize: 11, color: C2.muted } }, "\u0E1C\u0E39\u0E49\u0E14\u0E39\u0E41\u0E25: \u0E1E\u0E34\u0E21\u0E1E\u0E4C ", /* @__PURE__ */ React.createElement("strong", null, "admin"), " \u0E2B\u0E23\u0E37\u0E2D ", /* @__PURE__ */ React.createElement("strong", null, "staff")), liffReady && /* @__PURE__ */ React.createElement("button", { onClick: handleLineLoginClick, disabled: lineLoading, style: { width: "100%", padding: "13px 0", marginTop: 14, background: "#06C755", border: "none", borderRadius: 14, color: "#fff", fontWeight: 700, fontSize: 14, cursor: lineLoading ? "default" : "pointer", fontFamily: FONT, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 } }, lineLoading ? "\u23F3..." : "\u{1F4AC} \u0E40\u0E02\u0E49\u0E32\u0E2A\u0E39\u0E48\u0E23\u0E30\u0E1A\u0E1A\u0E14\u0E49\u0E27\u0E22 LINE"), onGuestBooking && /* @__PURE__ */ React.createElement("button", { onClick: onGuestBooking, style: { width: "100%", padding: "12px 0", marginTop: 10, background: "transparent", border: `1.5px dashed ${C2.border}`, borderRadius: 14, color: C2.muted, fontWeight: 600, fontSize: 13, cursor: "pointer", fontFamily: FONT } }, "\u{1F3AB} \u0E08\u0E2D\u0E07\u0E41\u0E1A\u0E1A\u0E44\u0E21\u0E48\u0E21\u0E35\u0E2A\u0E21\u0E32\u0E0A\u0E34\u0E01 (Walk-in)")), step === "otp" && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("button", { onClick: () => {
+  const _otpFlowUI = /* @__PURE__ */ React.createElement("div", { style: { minHeight: "100vh", background: dark ? "#09090B" : "#F8FAFC", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 20, fontFamily: FONT, transition: "background .3s" } }, /* @__PURE__ */ React.createElement("div", { style: { position: "fixed", top: 16, right: 16, zIndex: 100 } }, /* @__PURE__ */ React.createElement(ThemeToggle, { dark, toggle: toggleTheme })), /* @__PURE__ */ React.createElement("div", { style: { textAlign: "center", marginBottom: 32 } }, /* @__PURE__ */ React.createElement("img", { src: dark ? LOGO_WHITE : LOGO_FULL, alt: "Apex Fitness", style: { width: 200, height: "auto", objectFit: "contain", display: "block" } }), /* @__PURE__ */ React.createElement("div", { style: { fontSize: 12, color: C2.muted, letterSpacing: 3, marginTop: 12, fontWeight: 600 } }, "\u0E23\u0E30\u0E1A\u0E1A\u0E08\u0E2D\u0E07\u0E04\u0E25\u0E32\u0E2A\u0E2D\u0E2D\u0E19\u0E44\u0E25\u0E19\u0E4C")), /* @__PURE__ */ React.createElement("div", { style: { width: "100%", maxWidth: 400 } }, /* @__PURE__ */ React.createElement("div", { style: { background: C2.surf, borderRadius: 24, padding: 28, boxShadow: dark ? "0 8px 32px rgba(0,0,0,.5)" : "0 4px 24px rgba(0,0,0,.08)", border: `1px solid ${C2.border}` } }, step === "phone" && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { style: { fontSize: 18, fontWeight: 800, color: C2.text, marginBottom: 4 } }, "\u{1F4F1} \u0E40\u0E02\u0E49\u0E32\u0E2A\u0E39\u0E48\u0E23\u0E30\u0E1A\u0E1A"), /* @__PURE__ */ React.createElement("div", { style: { fontSize: 13, color: C2.muted, marginBottom: 20 } }, "\u0E2A\u0E21\u0E32\u0E0A\u0E34\u0E01: \u0E01\u0E23\u0E2D\u0E01\u0E40\u0E1A\u0E2D\u0E23\u0E4C\u0E42\u0E17\u0E23 \u2192 \u0E23\u0E31\u0E1A OTP"), /Line\//i.test(navigator.userAgent) && /* @__PURE__ */ React.createElement("div", { style: { background: "rgba(6,199,85,.1)", border: "1px solid #06C755", borderRadius: 10, padding: "8px 12px", marginBottom: 12, fontSize: 11, color: "#06C755", lineHeight: 1.6, fontWeight: 600 } }, "\u{1F4AC} \u0E40\u0E1B\u0E34\u0E14\u0E1C\u0E48\u0E32\u0E19 LINE: \u0E23\u0E2B\u0E31\u0E2A OTP \u0E08\u0E30\u0E41\u0E2A\u0E14\u0E07\u0E1A\u0E19\u0E2B\u0E19\u0E49\u0E32\u0E08\u0E2D \u0E44\u0E21\u0E48\u0E15\u0E49\u0E2D\u0E07\u0E23\u0E2D SMS"), inp(phone, setPhone, "text", "\u0E40\u0E0A\u0E48\u0E19 0812345678 \u0E2B\u0E23\u0E37\u0E2D admin"), err && /* @__PURE__ */ React.createElement("div", { style: { color: C2.red, fontSize: 12, marginTop: 10, padding: "10px 14px", background: C2.rM, borderRadius: 10, lineHeight: 1.6 } }, "\u26A0\uFE0F ", err), /* @__PURE__ */ React.createElement("button", { onClick: requestOTP, disabled: loading || !phone, style: { width: "100%", padding: "15px 0", marginTop: 16, background: !phone || loading ? "#374151" : C2.orange, border: "none", borderRadius: 14, color: "#fff", fontWeight: 800, fontSize: 16, cursor: !phone || loading ? "default" : "pointer", fontFamily: FONT, transition: "all .2s", boxShadow: !phone || loading ? "none" : "0 4px 16px rgba(249,115,22,.4)" } }, loading ? "\u23F3 \u0E01\u0E33\u0E25\u0E31\u0E07\u0E15\u0E23\u0E27\u0E08\u0E2A\u0E2D\u0E1A..." : "\u0E16\u0E31\u0E14\u0E44\u0E1B \u2192"), /* @__PURE__ */ React.createElement("div", { style: { textAlign: "center", marginTop: 14, fontSize: 11, color: C2.muted } }, "\u0E1C\u0E39\u0E49\u0E14\u0E39\u0E41\u0E25: \u0E1E\u0E34\u0E21\u0E1E\u0E4C ", /* @__PURE__ */ React.createElement("strong", null, "admin"), " \u0E2B\u0E23\u0E37\u0E2D ", /* @__PURE__ */ React.createElement("strong", null, "staff")), liffReady && /* @__PURE__ */ React.createElement("button", { onClick: handleLineLoginClick, disabled: lineLoading, style: { width: "100%", padding: "13px 0", marginTop: 14, background: "#06C755", border: "none", borderRadius: 14, color: "#fff", fontWeight: 700, fontSize: 14, cursor: lineLoading ? "default" : "pointer", fontFamily: FONT, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 } }, lineLoading ? "\u23F3..." : "\u{1F4AC} \u0E40\u0E02\u0E49\u0E32\u0E2A\u0E39\u0E48\u0E23\u0E30\u0E1A\u0E1A\u0E14\u0E49\u0E27\u0E22 LINE"), onGuestBooking && /* @__PURE__ */ React.createElement("button", { onClick: onGuestBooking, style: { width: "100%", padding: "12px 0", marginTop: 10, background: "transparent", border: `1.5px dashed ${C2.border}`, borderRadius: 14, color: C2.muted, fontWeight: 600, fontSize: 13, cursor: "pointer", fontFamily: FONT } }, "\u{1F3AB} \u0E08\u0E2D\u0E07\u0E41\u0E1A\u0E1A\u0E44\u0E21\u0E48\u0E21\u0E35\u0E2A\u0E21\u0E32\u0E0A\u0E34\u0E01 (Walk-in)")), step === "otp" && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("button", { onClick: () => {
     setStep("phone");
     setOtp("");
     setErr("");
@@ -1595,6 +1646,42 @@ function LoginScreen({ onLogin, deviceId, members, onMembersUpdate, onGuestBooki
     setAdminPass("");
     setErr("");
   }, style: { background: "none", border: "none", color: C2.muted, cursor: "pointer", fontSize: 13, marginBottom: 20, padding: 0, fontFamily: FONT } }, "\u2190 \u0E01\u0E25\u0E31\u0E1A"), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 14, alignItems: "center", marginBottom: 20 } }, /* @__PURE__ */ React.createElement("div", { style: { width: 50, height: 50, borderRadius: 14, background: adminType === "owner" ? C2.oM : C2.bM, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24 } }, adminType === "owner" ? "\u{1F451}" : "\u{1F9D1}\u200D\u{1F4BC}"), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("div", { style: { color: C2.text, fontWeight: 800, fontSize: 17 } }, adminType === "owner" ? "\u0E40\u0E08\u0E49\u0E32\u0E02\u0E2D\u0E07" : "\u0E1E\u0E19\u0E31\u0E01\u0E07\u0E32\u0E19"), /* @__PURE__ */ React.createElement("div", { style: { color: C2.muted, fontSize: 13 } }, "\u0E43\u0E2A\u0E48\u0E23\u0E2B\u0E31\u0E2A\u0E1C\u0E48\u0E32\u0E19\u0E40\u0E1E\u0E37\u0E48\u0E2D\u0E40\u0E02\u0E49\u0E32\u0E2A\u0E39\u0E48\u0E23\u0E30\u0E1A\u0E1A"))), inp(adminPass, setAdminPass, "password", "\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022"), err && /* @__PURE__ */ React.createElement("div", { style: { color: C2.red, fontSize: 12, marginTop: 10, padding: "10px 14px", background: C2.rM, borderRadius: 10 } }, "\u26A0\uFE0F ", err), /* @__PURE__ */ React.createElement("button", { onClick: verifyAdmin, disabled: loading || !adminPass, style: { width: "100%", padding: "15px 0", marginTop: 16, background: !adminPass || loading ? "#374151" : adminType === "owner" ? C2.orange : C2.blue, border: "none", borderRadius: 14, color: "#fff", fontWeight: 800, fontSize: 16, cursor: !adminPass || loading ? "default" : "pointer", fontFamily: FONT } }, loading ? "\u23F3..." : "\u0E40\u0E02\u0E49\u0E32\u0E2A\u0E39\u0E48\u0E23\u0E30\u0E1A\u0E1A \u2192"))), /* @__PURE__ */ React.createElement("div", { id: "recaptcha-container", style: { position: "fixed", bottom: 0, right: 0 } })));
+  const _pwCardStyle = { width: "100%", maxWidth: 380, background: dark ? "#18181B" : "#fff", borderRadius: 20, padding: 28, boxShadow: dark ? "none" : "0 4px 24px rgba(0,0,0,.06)", border: `1px solid ${dark ? "#27272A" : "#E5E7EB"}` };
+  const _pwInputStyle = { width: "100%", padding: "14px 16px", background: dark ? "#09090B" : "#F8FAFC", border: `1.5px solid ${pwErr ? "#EF4444" : (dark ? "#3F3F46" : "#E5E7EB")}`, borderRadius: 12, color: dark ? "#fff" : "#111827", fontSize: 16, boxSizing: "border-box", outline: "none", fontFamily: FONT, marginBottom: 12 };
+  const _pwBtnStyle = (disabled) => ({ width: "100%", padding: "15px 0", marginTop: 4, background: disabled ? "#374151" : "#F97316", border: "none", borderRadius: 14, color: "#fff", fontWeight: 800, fontSize: 16, cursor: disabled ? "default" : "pointer", fontFamily: FONT, transition: "all .2s" });
+  if (loginMode === "password") {
+    return /* @__PURE__ */ React.createElement("div", { style: { minHeight: "100vh", background: dark ? "#09090B" : "#F8FAFC", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 20, fontFamily: FONT } },
+      /* @__PURE__ */ React.createElement("div", { style: _pwCardStyle },
+        /* @__PURE__ */ React.createElement("div", { style: { textAlign: "center", marginBottom: 20, fontWeight: 800, fontSize: 18, color: dark ? "#fff" : "#111827" } }, "เข้าสู่ระบบด้วยรหัสผ่าน"),
+        pwErr ? /* @__PURE__ */ React.createElement("div", { style: { color: "#EF4444", padding: "10px 14px", background: dark ? "rgba(239,68,68,.12)" : "#FEF2F2", borderRadius: 10, lineHeight: 1.6, marginBottom: 12, fontSize: 14 } }, "⚠️ ", pwErr) : null,
+        /* @__PURE__ */ React.createElement("input", { value: phone, onChange: (e) => { setPhone(e.target.value); setPwErr(""); }, type: "tel", placeholder: "เบอร์โทรศัพท์", onKeyDown: (e) => e.key === "Enter" && loginWithPassword(), style: _pwInputStyle }),
+        /* @__PURE__ */ React.createElement("input", { value: password, onChange: (e) => { setPassword(e.target.value); setPwErr(""); }, type: "password", placeholder: "รหัสผ่าน", onKeyDown: (e) => e.key === "Enter" && loginWithPassword(), style: _pwInputStyle }),
+        /* @__PURE__ */ React.createElement("button", { onClick: loginWithPassword, disabled: pwLoading || !phone || !password, style: _pwBtnStyle(pwLoading || !phone || !password) }, pwLoading ? "⏳ กำลังเข้าสู่ระบบ..." : "เข้าสู่ระบบ"),
+        /* @__PURE__ */ React.createElement("div", { style: { textAlign: "center", marginTop: 16 } },
+          /* @__PURE__ */ React.createElement("a", { href: "#", onClick: (e) => { e.preventDefault(); setLoginMode("otp"); setPwErr(""); setPassword(""); }, style: { fontSize: 13, color: dark ? "#A1A1AA" : "#6B7280", textDecoration: "underline", cursor: "pointer" } }, "กลับไปเข้าสู่ระบบด้วย OTP")
+        )
+      )
+    );
+  }
+  if (loginMode === "force_change") {
+    return /* @__PURE__ */ React.createElement("div", { style: { minHeight: "100vh", background: dark ? "#09090B" : "#F8FAFC", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 20, fontFamily: FONT } },
+      /* @__PURE__ */ React.createElement("div", { style: _pwCardStyle },
+        /* @__PURE__ */ React.createElement("div", { style: { textAlign: "center", marginBottom: 8, fontWeight: 800, fontSize: 18, color: dark ? "#fff" : "#111827" } }, "ตั้งรหัสผ่านใหม่"),
+        /* @__PURE__ */ React.createElement("div", { style: { textAlign: "center", marginBottom: 20, fontSize: 13, color: dark ? "#A1A1AA" : "#6B7280" } }, "เข้าสู่ระบบครั้งแรก กรุณาตั้งรหัสผ่านใหม่ของคุณ"),
+        pwErr ? /* @__PURE__ */ React.createElement("div", { style: { color: "#EF4444", padding: "10px 14px", background: dark ? "rgba(239,68,68,.12)" : "#FEF2F2", borderRadius: 10, lineHeight: 1.6, marginBottom: 12, fontSize: 14 } }, "⚠️ ", pwErr) : null,
+        /* @__PURE__ */ React.createElement("input", { value: newPass1, onChange: (e) => { setNewPass1(e.target.value); setPwErr(""); }, type: "password", placeholder: "รหัสผ่านใหม่ (อย่างน้อย 4 หลัก)", onKeyDown: (e) => e.key === "Enter" && submitNewPassword(), style: _pwInputStyle }),
+        /* @__PURE__ */ React.createElement("input", { value: newPass2, onChange: (e) => { setNewPass2(e.target.value); setPwErr(""); }, type: "password", placeholder: "ยืนยันรหัสผ่านใหม่", onKeyDown: (e) => e.key === "Enter" && submitNewPassword(), style: _pwInputStyle }),
+        /* @__PURE__ */ React.createElement("button", { onClick: submitNewPassword, disabled: pwLoading || !newPass1 || !newPass2, style: _pwBtnStyle(pwLoading || !newPass1 || !newPass2) }, pwLoading ? "⏳ กำลังบันทึก..." : "ยืนยันรหัสผ่านใหม่")
+      )
+    );
+  }
+  return /* @__PURE__ */ React.createElement(React.Fragment, null,
+    _otpFlowUI,
+    step === "phone" ? /* @__PURE__ */ React.createElement("div", { style: { position: "fixed", bottom: 16, left: 0, right: 0, textAlign: "center", zIndex: 50 } },
+      /* @__PURE__ */ React.createElement("a", { href: "#", onClick: (e) => { e.preventDefault(); setLoginMode("password"); setErr(""); }, style: { fontSize: 13, color: dark ? "#A1A1AA" : "#6B7280", textDecoration: "underline", cursor: "pointer", background: dark ? "#18181B" : "#fff", padding: "6px 14px", borderRadius: 20, boxShadow: "0 2px 8px rgba(0,0,0,.15)" } }, "เข้าสู่ระบบด้วยรหัสผ่านแทน")
+    ) : null
+  );
+
 }
 function AnnouncementBanner({ text, onDismiss }) {
   if (!text || !text.trim()) return null;
