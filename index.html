@@ -653,7 +653,7 @@ body.apex-light {
     }catch(e){console.warn("Firebase init:",e.message);}
   </script>
   <script>
-    const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxLw8KA_SpcIOq-gzQFw5Kt48PcLRnUpKIAKUe45u6TvYWrO8Uw279OVMpptgLgkaOQyQ/exec";
+    const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxqffA8J25EmgBVKgdzp_gF33jzKtIIWNKRoEMd2_8N8WGLzDErGtJoqHZ0IkSsbjVW0w/exec";
     // ← ใส่ LIFF ID จาก LINE Developers Console ตรงนี้ เพื่อเปิดใช้ "เข้าสู่ระบบด้วย LINE"
     // ถ้าปล่อยว่างไว้ ปุ่ม LINE Login จะไม่แสดง (ระบบยังใช้งานได้ปกติด้วยเบอร์โทร+OTP)
     const LIFF_ID = "2010458588-pD1CwMsn";
@@ -3300,6 +3300,7 @@ function App() {
             if (se_built[sid] && _sheetsSessions[sid]) {
               se_built[sid].bk = _sheetsSessions[sid].bk || [];
               se_built[sid].wl = _sheetsSessions[sid].wl || [];
+              se_built[sid].att = _sheetsSessions[sid].att || {};
               se_built[sid].att = _sheetsSessions[sid].att || {}; // [FIX#ATT] restore attendance from Sheets
             }
           });
@@ -3806,6 +3807,16 @@ function App() {
             });
           }
           if (_d.guestBookings) { setGuestBookings(_d.guestBookings); store.set("apex_guest_bookings", _d.guestBookings); }
+          // [FIX] Rebuild sessions with bookings+att (not buildSessions which creates empty sessions)
+          if (_d.sessions && _d.classes) {
+            const _cM={};(_d.classes||[]).forEach(function(x){_cM[x.id]=x;});
+            const _DP={"#F97316":"#431407","#22C55E":"#052e16","#EF4444":"#450a0a","#A855F7":"#2e1065","#F59E0B":"#451a03","#10B981":"#022c22","#3B82F6":"#172554","#06B6D4":"#083344"};
+            const _sm=buildSessions(_d.classes);
+            (_d.sessions||[]).forEach(function(s){var cls=_cM[String(s.classId||"")];if(!cls)return;var dv=new Date(s.date);if(isNaN(dv))return;var sd=new Date(dv.getTime()+7*3600000).toISOString().split("T")[0];var sid=cls.id+"_"+sd;var bk=typeof healIds==="function"?healIds(s.bookings):(s.bookings?String(s.bookings).split(",").map(x=>x.trim()).filter(Boolean):[]);var wl=typeof healIds==="function"?healIds(s.waitlist):(s.waitlist?String(s.waitlist).split(",").map(x=>x.trim()).filter(Boolean):[]);if(_sm[sid]){_sm[sid].bk=bk;_sm[sid].wl=wl;}else{_sm[sid]={id:sid,cid:cls.id,name:cls.name,ins:cls.ins,date:sd,t:s.timeOverride||cls.t,dur:cls.dur,cap:cls.cap,wlCap:cls.wlCap||cls.wl,col:cls.col,dim:_DP[cls.col]||"#1a0a00",ico:cls.ico,bk:bk,wl:wl,att:{}};}});
+            (_d.bookings||[]).forEach(function(b){var sid=String(b.sessionId||"").trim(),mid=String(b.memberId||"").trim();if(!sid||!mid||!_sm[sid])return;var t=String(b.type||"main").trim();if((t==="main"||t==="")&&_sm[sid].bk.indexOf(mid)===-1)_sm[sid].bk.push(mid);else if(t==="waitlist"&&_sm[sid].wl.indexOf(mid)===-1)_sm[sid].wl.push(mid);});
+            (_d.attendance||[]).forEach(function(a){var sid=String(a.sessionId||"").trim(),mid=String(a.memberId||"").trim();if(_sm[sid]&&mid&&a.status)_sm[sid].att[mid]=String(a.status);});
+            setSessions(_sm);store.set("apex_sessions",_sm);
+          }
           if(_d.checkinLog){const _seenCL2={};setCheckinLog(_d.checkinLog.filter(function(r){if(r.type!=='checkin')return true;const _k=String(r.sessionId)+'|'+String(r.memberId);if(_seenCL2[_k])return false;_seenCL2[_k]=true;return true;}));} // [v4.3]
         }
       } catch (e) { console.log("Polling Sync:", e); }
