@@ -1367,6 +1367,11 @@ function LoginScreen({ onLogin, deviceId, members, onMembersUpdate, onGuestBooki
   const [newPass2, setNewPass2] = useState("");
   const loginWithPassword = async () => {
     setPwErr("");
+    if (isAdmin(phone.toLowerCase().trim())) {
+      setAdminType(phone.toLowerCase().trim() === "admin" ? "owner" : "staff");
+      setStep("admin_pass");
+      return;
+    }
     if (!phone || !password) { setPwErr("กรุณากรอกเบอร์โทรและรหัสผ่าน"); return; }
     setPwLoading(true);
     try {
