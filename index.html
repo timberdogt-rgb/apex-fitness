@@ -1660,9 +1660,7 @@ function LoginScreen({ onLogin, deviceId, members, onMembersUpdate, onGuestBooki
   }
   return /* @__PURE__ */ React.createElement(React.Fragment, null,
     _otpFlowUI,
-    step === "phone" ? /* @__PURE__ */ React.createElement("div", { style: { position: "fixed", bottom: 16, left: 0, right: 0, textAlign: "center", zIndex: 50 } },
-      /* @__PURE__ */ React.createElement("a", { href: "#", onClick: (e) => { e.preventDefault(); setLoginMode("password"); setErr(""); }, style: { fontSize: 13, color: dark ? "#A1A1AA" : "#6B7280", textDecoration: "underline", cursor: "pointer", background: dark ? "#18181B" : "#fff", padding: "6px 14px", borderRadius: 20, boxShadow: "0 2px 8px rgba(0,0,0,.15)" } }, "เข้าสู่ระบบด้วยรหัสผ่านแทน")
-    ) : null
+    null
   );
 
 }
