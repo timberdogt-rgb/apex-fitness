@@ -1198,6 +1198,20 @@ const buildSessions = (classes) => {
   }
   return map;
 };
+const PENDING_TTL_MS = 20000;
+const markPendingWrite = (sid) => {
+  try {
+    const p = JSON.parse(localStorage.getItem("apex_pending_sids") || "{}");
+    p[sid] = Date.now();
+    localStorage.setItem("apex_pending_sids", JSON.stringify(p));
+  } catch (e) {}
+};
+const isPendingWrite = (sid) => {
+  try {
+    const p = JSON.parse(localStorage.getItem("apex_pending_sids") || "{}");
+    return !!(p[sid] && (Date.now() - p[sid]) < PENDING_TTL_MS);
+  } catch (e) { return false; }
+};
 const Toast = ({ t }) => {
   if (!t) return null;
   const bg = t.ty === "ok" ? C.green : t.ty === "err" ? C.red : t.ty === "warn" ? C.amber : t.ty === "line" ? C.line : C.blue;
@@ -3424,10 +3438,13 @@ function App() {
         if (_sheetsSessions && Object.keys(_sheetsSessions).length > 0) {
           Object.keys(_sheetsSessions).forEach(function(sid) {
             if (se_built[sid] && _sheetsSessions[sid]) {
-              se_built[sid].bk = _sheetsSessions[sid].bk || [];
-              se_built[sid].wl = _sheetsSessions[sid].wl || [];
+              if (isPendingWrite(sid)) {
+                // [FIX#RACE] recent local book/cancel write in flight — server snapshot may predate it, keep local state
+              } else {
+                se_built[sid].bk = _sheetsSessions[sid].bk || [];
+                se_built[sid].wl = _sheetsSessions[sid].wl || [];
+              }
               se_built[sid].att = _sheetsSessions[sid].att || {};
-              se_built[sid].att = _sheetsSessions[sid].att || {}; // [FIX#ATT] restore attendance from Sheets
             }
           });
         }
@@ -3519,6 +3536,7 @@ function App() {
     }
     setSessions(ns);
     save("apex_sessions", ns);
+    markPendingWrite(sid);
     showToast(`\u2705 \u0E08\u0E2D\u0E07 ${s.name} \u0E2A\u0E33\u0E40\u0E23\u0E47\u0E08!`, "ok");
     const res = await postAction("book", { sessionId: sid, memberId: m.id });
     if (!res.ok && !res._offline) showToast(res.error || "\u0E1A\u0E31\u0E19\u0E17\u0E36\u0E01\u0E44\u0E21\u0E48\u0E2A\u0E33\u0E40\u0E23\u0E47\u0E08 \u0E25\u0E2D\u0E07\u0E23\u0E35\u0E40\u0E1F\u0E23\u0E0A\u0E2B\u0E19\u0E49\u0E32", "err");
@@ -3550,6 +3568,7 @@ function App() {
     save("apex_sessions", ns);
     pushNotif(m.id, "info", "\u0E40\u0E02\u0E49\u0E32\u0E23\u0E32\u0E22\u0E01\u0E32\u0E23\u0E2A\u0E33\u0E23\u0E2D\u0E07\u0E41\u0E25\u0E49\u0E27", `\u0E04\u0E38\u0E13\u0E2D\u0E22\u0E39\u0E48\u0E25\u0E33\u0E14\u0E31\u0E1A ${s.wl.length + 1} \u0E02\u0E2D\u0E07 ${s.name} (${thFmt(s.date)} ${s.t}) \u2014 \u0E08\u0E30\u0E41\u0E08\u0E49\u0E07\u0E40\u0E21\u0E37\u0E48\u0E2D\u0E44\u0E14\u0E49\u0E17\u0E35\u0E48\u0E19\u0E31\u0E48\u0E07`);
     showToast(`\u{1FA91} \u0E2D\u0E22\u0E39\u0E48\u0E43\u0E19\u0E23\u0E32\u0E22\u0E01\u0E32\u0E23\u0E2A\u0E33\u0E23\u0E2D\u0E07\u0E25\u0E33\u0E14\u0E31\u0E1A ${s.wl.length + 1}`, "ok");
+    markPendingWrite(sid);
     const res = await postAction("joinWaitlist", { sessionId: sid, memberId: m.id });
     if (!res.ok && !res._offline) showToast(res.error || "\u0E1A\u0E31\u0E19\u0E17\u0E36\u0E01\u0E44\u0E21\u0E48\u0E2A\u0E33\u0E40\u0E23\u0E47\u0E08 \u0E25\u0E2D\u0E07\u0E23\u0E35\u0E40\u0E1F\u0E23\u0E0A\u0E2B\u0E19\u0E49\u0E32", "err");
   }, [auth, members, sessions, showToast, save, pushNotif, postAction]);
@@ -3568,6 +3587,7 @@ function App() {
       const pm = members.find((x) => x.id === promoted);
       showToast(`✅ ยกเลิกแล้ว — แจ้ง ${(pm == null ? void 0 : pm.name) || "สมาชิก"} ในสำรองให้ยืนยันภายใน 45 นาที`, "line");
     } else showToast("ยกเลิกการจองแล้ว", "warn");
+    markPendingWrite(sid);
     const res = await postAction("cancel", { sessionId: sid, memberId: mid });
     if (res.ok && res.lateCancel) {
       showToast("\u26A0\uFE0F \u0E22\u0E01\u0E40\u0E25\u0E34\u0E01\u0E43\u0E01\u0E25\u0E49\u0E40\u0E27\u0E25\u0E32\u0E40\u0E01\u0E34\u0E19\u0E44\u0E1B \u0E19\u0E31\u0E1A\u0E40\u0E1B\u0E47\u0E19 No-show", "err");
@@ -3590,6 +3610,7 @@ function App() {
     setSessions(ns);
     save("apex_sessions", ns);
     showToast("\u0E2D\u0E2D\u0E01\u0E08\u0E32\u0E01\u0E23\u0E32\u0E22\u0E01\u0E32\u0E23\u0E2A\u0E33\u0E23\u0E2D\u0E07\u0E41\u0E25\u0E49\u0E27", "warn");
+    markPendingWrite(sid);
     const res = await postAction("cancelWaitlist", { sessionId: sid, memberId: mid });
     if (!res.ok && !res._offline) showToast(res.error || "\u0E1A\u0E31\u0E19\u0E17\u0E36\u0E01\u0E44\u0E21\u0E48\u0E2A\u0E33\u0E40\u0E23\u0E47\u0E08", "err");
   }, [auth, sessions, showToast, save, postAction]);
