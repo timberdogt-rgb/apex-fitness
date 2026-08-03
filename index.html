@@ -617,6 +617,15 @@ body.apex-light {
   <div id="root"></div>
   <script>
     window.onerror=function(msg,src,line,col,err){
+      // [FIX 2026-08-03] Only treat this as a fatal app error if it genuinely came
+      // from our own page script. Browser extensions (MetaMask, Grammarly, ad
+      // blockers, translators, in-app browser injections, etc.) run on every page
+      // and throw their own errors — these were previously caught here and shown
+      // as a full-screen "App Error" overlay with a 5s auto-reload loop, hiding the
+      // real (working) app underneath. Confirmed live via a MetaMask "Failed to
+      // connect" error triggering this exact overlay on production. This is very
+      // likely the "stuck / must switch browser" bug reported by customers.
+      if(src && src.indexOf(location.origin)!==0) return true; // not our own script — ignore
       if(src&&(src.indexOf('line-scdn.net')>-1||src.indexOf('liff.line.me')>-1)) return true;
       // cross-origin sanitized errors always arrive as "Script error." at line 0 — safe to ignore
       if(!line||line===0||String(msg||'')==='Script error.') return true;
@@ -630,6 +639,11 @@ body.apex-light {
     };
     window.onunhandledrejection=function(e){
       var reason=e.reason?e.reason.toString():'';
+      var stack=(e.reason&&e.reason.stack)?String(e.reason.stack):'';
+      // [FIX 2026-08-03] ignore promise rejections thrown by browser extensions,
+      // detected via their stack trace referencing an extension:// URL (same
+      // root cause as the window.onerror fix above).
+      if(/chrome-extension:\/\/|moz-extension:\/\/|safari-web-extension:\/\//.test(stack)) return;
       // ignore network/fetch errors — these are expected when GAS/Firebase is slow on mobile
       if(!reason||reason.indexOf('fetch')>-1||reason.indexOf('NetworkError')>-1||reason.indexOf('Failed to fetch')>-1||reason.indexOf('Load failed')>-1) return;
       document.getElementById("splash").classList.add("hidden");
