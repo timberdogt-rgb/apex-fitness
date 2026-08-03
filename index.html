@@ -1004,11 +1004,12 @@ const NAV_ICONS = {
   settings:      '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>',
 };
 const TODAY = /* @__PURE__ */ new Date();
-const fmt = (d) => d.toISOString().split("T")[0];
+// Always render calendar-day strings in Asia/Bangkok, never raw UTC (toISOString()
+// silently rolls back to "yesterday" for 00:00-07:00 Thai time). See fmt()/shift().
+const fmt = (d) => d.toLocaleDateString("en-CA", { timeZone: "Asia/Bangkok" });
 const shift = (d, n) => {
-  const r = new Date(d);
-  r.setDate(r.getDate() + n);
-  return r;
+  const [y, m, dd] = fmt(d).split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, dd + n));
 };
 const DS = ["\u0E2D\u0E32", "\u0E08", "\u0E2D", "\u0E1E", "\u0E1E\u0E24", "\u0E28", "\u0E2A"];
 const DF = ["\u0E2D\u0E32\u0E17\u0E34\u0E15\u0E22\u0E4C", "\u0E08\u0E31\u0E19\u0E17\u0E23\u0E4C", "\u0E2D\u0E31\u0E07\u0E04\u0E32\u0E23", "\u0E1E\u0E38\u0E18", "\u0E1E\u0E24\u0E2B\u0E31\u0E2A\u0E1A\u0E14\u0E35", "\u0E28\u0E38\u0E01\u0E23\u0E4C", "\u0E40\u0E2A\u0E32\u0E23\u0E4C"];
@@ -3318,8 +3319,7 @@ function App() {
             if (s.date) {
               var _dv = new Date(s.date);
               if (!isNaN(_dv.getTime())) {
-                var _bkk = new Date(_dv.getTime() + 7 * 3600 * 1000);
-                sDate = _bkk.toISOString().split("T")[0];
+                sDate = fmt(_dv);
               } else { sDate = String(s.date).replace(/T.*/,"").slice(0,10); }
             } else { sDate = ""; }
             if (!sDate || sDate.length !== 10) return;
@@ -3950,7 +3950,7 @@ function App() {
             // Apply sessions data: bk + wl with timezone fix
             _d.sessions.forEach(function(s) {
               var cls=_clsMap3[String(s.classId||"")]; if(!cls) return;
-              var sDate; if(s.date){var _dv=new Date(s.date);if(!isNaN(_dv.getTime())){var _bkk=new Date(_dv.getTime()+7*3600*1000);sDate=_bkk.toISOString().split("T")[0];}else{sDate=String(s.date).replace(/T.*/,"").slice(0,10);}}else{sDate="";}
+              var sDate; if(s.date){var _dv=new Date(s.date);if(!isNaN(_dv.getTime())){sDate=fmt(_dv);}else{sDate=String(s.date).replace(/T.*/,"").slice(0,10);}}else{sDate="";}
               if(!sDate||sDate.length!==10) return;
               var tsid=cls.id+"_"+sDate;
               if(_pollNext[tsid]){var bk=healIds(s.bookings),wl=healIds(s.waitlist);_pollNext[tsid].bk=bk;_pollNext[tsid].wl=wl;}
