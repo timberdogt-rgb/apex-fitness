@@ -406,10 +406,12 @@ function generateSessionsForNext14Days() {
       var sid = c.id + "_" + ds;
       if (existing.indexOf(sid) !== -1) return;
       sh.appendRow([sid, c.id, ds, "", ""]);
-      // Force text format on bookings (col 4) and waitlist (col 5) immediately
-      // so Sheets never auto-converts comma-separated IDs to numbers
+      // Force text format on date (col 3), bookings (col 4) and waitlist (col 5)
+      // immediately so Sheets never auto-converts the yyyy-MM-dd date string into
+      // a Date serial (which would re-introduce the UTC midnight-boundary bug)
+      // or comma-separated IDs into numbers.
       var newRow = sh.getLastRow();
-      sh.getRange(newRow, 4, 1, 2).setNumberFormat("@");
+      sh.getRange(newRow, 3, 1, 3).setNumberFormat("@");
       existing.push(sid);
       added++;
     });
@@ -523,7 +525,11 @@ function getAllData() {
   return {
     members:       readSheet(SHEETS.MEMBERS),
     classes:       classes,
-    sessions:      readSheet(SHEETS.SESSIONS),
+    // Sheets can silently auto-convert the "date" column to a Date-type cell;
+    // if that Date object reaches JSON.stringify() untouched it serializes via
+    // toISOString() (UTC), which renders as "yesterday" during 00:00-07:00 Thai
+    // time. Always normalize to a plain Asia/Bangkok yyyy-MM-dd string here.
+    sessions:      readSheet(SHEETS.SESSIONS).map(function(s) { s.date = toISODateStr(s.date); return s; }),
     bookings:      readSheet(SHEETS.BOOKINGS),
     attendance:    readSheet(SHEETS.ATTENDANCE),
     checkinLog:    (function() {
