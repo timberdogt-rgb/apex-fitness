@@ -1726,6 +1726,7 @@ function AnnouncementBanner({ text, onDismiss }) {
 function ScheduleView({ sessions, member, settings, onBook, onWaitlist, onCancel, onCancelWL, onToggleWlOptIn }) {
   const [day, setDay] = useState(0), [exp, setExp] = useState(null), [modal, setModal] = useState(null), [rulesOpen, setRulesOpen] = useState(false);
   const [showScheduleImg, setShowScheduleImg] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const ds = fmt(shift(TODAY, day));
   const list = useMemo(() => Object.values(sessions).filter((s) => s.date === ds).sort((a, b) => a.t.localeCompare(b.t)), [sessions, ds]);
   const st = memberStatus(member);
@@ -1766,12 +1767,18 @@ function ScheduleView({ sessions, member, settings, onBook, onWaitlist, onCancel
       e.stopPropagation();
       canBook ? setModal({ kind: "book", sid: s.id, name: s.name, col: s.col, ico: s.ico }) : setModal({ kind: "membership" });
     }, full: true, disabled: !!(member && member.suspended) }))));
-  }), modal && /* @__PURE__ */ React.createElement(Overlay, { onClose: () => setModal(null) }, modal.kind === "book" && /* @__PURE__ */ React.createElement("div", { style: { textAlign: "center" } }, /* @__PURE__ */ React.createElement("div", { style: { fontSize: 52, marginBottom: 8 } }, modal.ico), /* @__PURE__ */ React.createElement("div", { style: { color: C.text, fontWeight: 800, fontSize: 18, marginBottom: 4 } }, _t("confirmBookTitle")), /* @__PURE__ */ React.createElement("div", { style: { color: modal.col, fontWeight: 700, marginBottom: 16 } }, modal.name), member.membershipType === "per_session" && /* @__PURE__ */ React.createElement("div", { style: { background: C.aM, border: `1px solid ${C.amber}`, borderRadius: 10, padding: "10px 14px", marginBottom: 14, color: C.amber, fontSize: 13 } }, "\u{1F39F}\uFE0F \u0E43\u0E0A\u0E49 1 \u0E40\u0E04\u0E23\u0E14\u0E34\u0E15 (\u0E40\u0E2B\u0E25\u0E37\u0E2D ", (member.sessionsLeft || 0) - 1, " \u0E04\u0E23\u0E31\u0E49\u0E07)"), /* @__PURE__ */ React.createElement("div", { style: { background: C.bg, borderRadius: 10, padding: "10px 14px", marginBottom: 20, fontSize: 12, color: C.muted, lineHeight: 1.7 } }, "\u{1F4CC} 1 \u0E04\u0E19 1 \u0E2A\u0E34\u0E17\u0E18\u0E34\u0E4C\u0E15\u0E48\u0E2D\u0E04\u0E25\u0E32\u0E2A", /* @__PURE__ */ React.createElement("br", null), "\u23F0 \u0E40\u0E0A\u0E47\u0E04\u0E2D\u0E34\u0E19\u0E01\u0E48\u0E2D\u0E19 ", settings.checkinBeforeMin, " \u0E19\u0E32\u0E17\u0E35 \u0E2A\u0E32\u0E22\u0E44\u0E21\u0E48\u0E40\u0E01\u0E34\u0E19 ", settings.checkinAfterMin, " " + _t("wlConfirmMin")), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 10 } }, /* @__PURE__ */ React.createElement(Btn, { label: _t("cancelBtn"), bg: C.surf, col: C.muted, onClick: () => setModal(null), full: true }), /* @__PURE__ */ React.createElement(Btn, { label: _t("confirmBtn"), bg: modal.col, onClick: () => {
-    onBook(modal.sid);
-    setModal(null);
-  }, full: true }))), modal.kind === "waitlist" && /* @__PURE__ */ React.createElement("div", { style: { textAlign: "center" } }, /* @__PURE__ */ React.createElement("div", { style: { fontSize: 52, marginBottom: 8 } }, "\u{1FA91}"), /* @__PURE__ */ React.createElement("div", { style: { color: C.text, fontWeight: 800, fontSize: 18, marginBottom: 4 } }, _t("wlTitle")), /* @__PURE__ */ React.createElement("div", { style: { color: C.amber, fontWeight: 700, marginBottom: 8 } }, modal.name), /* @__PURE__ */ React.createElement("div", { style: { background: C.aM, border: `1px solid ${C.amber}`, borderRadius: 10, padding: 14, marginBottom: 16, fontSize: 13, color: C.amber, lineHeight: 1.6 } }, _t("rankIn") + " ", /* @__PURE__ */ React.createElement("strong", { style: { fontSize: 20 } }, modal.pos), " " + _t("inWL"), /* @__PURE__ */ React.createElement("br", null), _t("wlInfo")), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 10 } }, /* @__PURE__ */ React.createElement(Btn, { label: _t("cancelBtn"), bg: C.surf, col: C.muted, onClick: () => setModal(null), full: true }), /* @__PURE__ */ React.createElement(Btn, { label: _t("confirmWLBtn"), bg: C.amber, onClick: () => {
-    onWaitlist(modal.sid);
-    setModal(null);
+  }), modal && /* @__PURE__ */ React.createElement(Overlay, { onClose: () => { if (!submitting) setModal(null); } }, modal.kind === "book" && /* @__PURE__ */ React.createElement("div", { style: { textAlign: "center" } }, /* @__PURE__ */ React.createElement("div", { style: { fontSize: 52, marginBottom: 8 } }, modal.ico), /* @__PURE__ */ React.createElement("div", { style: { color: C.text, fontWeight: 800, fontSize: 18, marginBottom: 4 } }, _t("confirmBookTitle")), /* @__PURE__ */ React.createElement("div", { style: { color: modal.col, fontWeight: 700, marginBottom: 16 } }, modal.name), member.membershipType === "per_session" && /* @__PURE__ */ React.createElement("div", { style: { background: C.aM, border: `1px solid ${C.amber}`, borderRadius: 10, padding: "10px 14px", marginBottom: 14, color: C.amber, fontSize: 13 } }, "\u{1F39F}\uFE0F \u0E43\u0E0A\u0E49 1 \u0E40\u0E04\u0E23\u0E14\u0E34\u0E15 (\u0E40\u0E2B\u0E25\u0E37\u0E2D ", (member.sessionsLeft || 0) - 1, " \u0E04\u0E23\u0E31\u0E49\u0E07)"), /* @__PURE__ */ React.createElement("div", { style: { background: C.bg, borderRadius: 10, padding: "10px 14px", marginBottom: 20, fontSize: 12, color: C.muted, lineHeight: 1.7 } }, "\u{1F4CC} 1 \u0E04\u0E19 1 \u0E2A\u0E34\u0E17\u0E18\u0E34\u0E4C\u0E15\u0E48\u0E2D\u0E04\u0E25\u0E32\u0E2A", /* @__PURE__ */ React.createElement("br", null), "\u23F0 \u0E40\u0E0A\u0E47\u0E04\u0E2D\u0E34\u0E19\u0E01\u0E48\u0E2D\u0E19 ", settings.checkinBeforeMin, " \u0E19\u0E32\u0E17\u0E35 \u0E2A\u0E32\u0E22\u0E44\u0E21\u0E48\u0E40\u0E01\u0E34\u0E19 ", settings.checkinAfterMin, " " + _t("wlConfirmMin")), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 10 } }, /* @__PURE__ */ React.createElement(Btn, { label: _t("cancelBtn"), bg: C.surf, col: C.muted, disabled: submitting, onClick: () => { if (!submitting) setModal(null); }, full: true }), /* @__PURE__ */ React.createElement(Btn, { label: submitting ? "กำลังบันทึก..." : _t("confirmBtn"), bg: modal.col, disabled: submitting, onClick: async () => {
+    if (submitting) return;
+    setSubmitting(true);
+    const res = await onBook(modal.sid);
+    setSubmitting(false);
+    if (res && res.ok !== false) setModal(null);
+  }, full: true }))), modal.kind === "waitlist" && /* @__PURE__ */ React.createElement("div", { style: { textAlign: "center" } }, /* @__PURE__ */ React.createElement("div", { style: { fontSize: 52, marginBottom: 8 } }, "\u{1FA91}"), /* @__PURE__ */ React.createElement("div", { style: { color: C.text, fontWeight: 800, fontSize: 18, marginBottom: 4 } }, _t("wlTitle")), /* @__PURE__ */ React.createElement("div", { style: { color: C.amber, fontWeight: 700, marginBottom: 8 } }, modal.name), /* @__PURE__ */ React.createElement("div", { style: { background: C.aM, border: `1px solid ${C.amber}`, borderRadius: 10, padding: 14, marginBottom: 16, fontSize: 13, color: C.amber, lineHeight: 1.6 } }, _t("rankIn") + " ", /* @__PURE__ */ React.createElement("strong", { style: { fontSize: 20 } }, modal.pos), " " + _t("inWL"), /* @__PURE__ */ React.createElement("br", null), _t("wlInfo")), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 10 } }, /* @__PURE__ */ React.createElement(Btn, { label: _t("cancelBtn"), bg: C.surf, col: C.muted, disabled: submitting, onClick: () => { if (!submitting) setModal(null); }, full: true }), /* @__PURE__ */ React.createElement(Btn, { label: submitting ? "กำลังบันทึก..." : _t("confirmWLBtn"), bg: C.amber, disabled: submitting, onClick: async () => {
+    if (submitting) return;
+    setSubmitting(true);
+    const res = await onWaitlist(modal.sid);
+    setSubmitting(false);
+    if (res && res.ok !== false) setModal(null);
   }, full: true }))), modal.kind === "cancelMain" && /* @__PURE__ */ React.createElement("div", { style: { textAlign: "center" } }, /* @__PURE__ */ React.createElement("div", { style: { fontSize: 40, marginBottom: 10 } }, "\u{1F5D1}\uFE0F"), /* @__PURE__ */ React.createElement("div", { style: { color: C.text, fontWeight: 800, fontSize: 18, marginBottom: 8 } }, _t("cancelConfirmTitle")), /* @__PURE__ */ React.createElement("div", { style: { color: C.muted, fontSize: 14, marginBottom: 8 } }, modal.name), modal.lateCancel && /* @__PURE__ */ React.createElement("div", { style: { background: C.rM, border: `1px solid ${C.red}`, borderRadius: 10, padding: "10px 14px", marginBottom: 14, fontSize: 12, color: C.red, lineHeight: 1.6, textAlign: "left" } }, _t("lateWarn") + " ", /* @__PURE__ */ React.createElement("strong", null, _t("noShow")), " \u0E40\u0E1E\u0E23\u0E32\u0E30\u0E40\u0E2B\u0E25\u0E37\u0E2D\u0E40\u0E27\u0E25\u0E32\u0E19\u0E49\u0E2D\u0E22\u0E01\u0E27\u0E48\u0E32 ", settings.cancelHoursLimit, " \u0E0A\u0E21. \u0E01\u0E48\u0E2D\u0E19\u0E04\u0E25\u0E32\u0E2A\u0E40\u0E23\u0E34\u0E48\u0E21"), modal.hasWL && /* @__PURE__ */ React.createElement("div", { style: { background: C.bM, borderRadius: 10, padding: "10px 14px", marginBottom: 14, fontSize: 12, color: C.blue } }, _t("wlNotify")), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 10 } }, /* @__PURE__ */ React.createElement(Btn, { label: _t("keepBooking"), bg: C.surf, col: C.muted, onClick: () => setModal(null), full: true }), /* @__PURE__ */ React.createElement(Btn, { label: _t("confirmCancelBtn"), bg: C.red, onClick: () => {
     onCancel(modal.sid);
     setModal(null);
@@ -1885,7 +1892,7 @@ function NotificationsView({ notifications, member, onRead }) {
   const COLOR = { promoted: C.green, cancelled: C.amber, reminder: C.orange, suspended: C.red, membership: C.amber, info: C.blue };
   return /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("div", { style: { color: C.muted, fontSize: 11, fontWeight: 700, letterSpacing: 2, marginBottom: 12 } }, "\u0E01\u0E32\u0E23\u0E41\u0E08\u0E49\u0E07\u0E40\u0E15\u0E37\u0E2D\u0E19 (", mine.length, ")"), mine.map((n) => /* @__PURE__ */ React.createElement("div", { key: n.id, onClick: () => !n.read && onRead(n.id), style: { background: C.surf, borderRadius: 14, border: `1px solid ${n.read ? C.border : COLOR[n.type] || C.blue}`, padding: 14, marginBottom: 8, cursor: n.read ? "default" : "pointer", opacity: n.read ? 0.7 : 1 } }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 12, alignItems: "flex-start" } }, /* @__PURE__ */ React.createElement("div", { style: { width: 38, height: 38, borderRadius: "50%", background: `${COLOR[n.type] || C.blue}22`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 } }, ICON[n.type] || "\u{1F514}"), /* @__PURE__ */ React.createElement("div", { style: { flex: 1 } }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "flex-start" } }, /* @__PURE__ */ React.createElement("div", { style: { color: C.text, fontWeight: 700, fontSize: 14 } }, n.title), !n.read && /* @__PURE__ */ React.createElement("div", { style: { width: 8, height: 8, borderRadius: "50%", background: COLOR[n.type] || C.blue, flexShrink: 0, marginTop: 4 } })), /* @__PURE__ */ React.createElement("div", { style: { color: C.sub, fontSize: 13, marginTop: 3, lineHeight: 1.5 } }, n.body), /* @__PURE__ */ React.createElement("div", { style: { color: C.muted, fontSize: 11, marginTop: 5 } }, timeAgo(n.ts)))))));
 }
-function ProfileView({ member, sessions, settings, onUploadPhoto, onToggleWlOptIn }) {
+function ProfileView({ member, sessions, settings, onUploadPhoto, onToggleWlOptIn, onPasswordChanged }) {
   const myS = Object.values(sessions).filter((s) => s.bk.includes(member.id));
   const att = myS.filter((s) => s.att[member.id] === "present").length;
   const st = memberStatus(member);
@@ -1910,6 +1917,7 @@ function ProfileView({ member, sessions, settings, onUploadPhoto, onToggleWlOptI
       const d = await r.json();
       if (!d.ok) { setPwErr(d.error || "เปลี่ยนรหัสผ่านไม่สำเร็จ"); setPwLoading(false); return; }
       setPwMsg("เปลี่ยนรหัสผ่านสำเร็จ");
+      if (onPasswordChanged) onPasswordChanged(member.id);
       setNewPass1(""); setNewPass2("");
       setPwLoading(false);
     } catch (e) {
@@ -3522,25 +3530,31 @@ function App() {
   }, [save]);
   const book = useCallback(async (sid) => {
     const m = members.find((x) => x.id === (auth == null ? void 0 : auth.mid));
-    if (!m) return;
+    if (!m) return { ok:false, error:"\u0E44\u0E21\u0E48\u0E1E\u0E1A\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E2A\u0E21\u0E32\u0E0A\u0E34\u0E01 \u0E01\u0E23\u0E38\u0E13\u0E32\u0E40\u0E02\u0E49\u0E32\u0E2A\u0E39\u0E48\u0E23\u0E30\u0E1A\u0E1A\u0E43\u0E2B\u0E21\u0E48" };
     const s = sessions[sid];
-    if (!s) return;
+    if (!s) return { ok:false, error:"\u0E44\u0E21\u0E48\u0E1E\u0E1A\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E04\u0E25\u0E32\u0E2A\u0E19\u0E35\u0E49 \u0E01\u0E23\u0E38\u0E13\u0E32\u0E23\u0E35\u0E40\u0E1F\u0E23\u0E0A\u0E2B\u0E19\u0E49\u0E32" };
     if (s.bk.includes(m.id)) {
       showToast("\u0E08\u0E2D\u0E07\u0E41\u0E25\u0E49\u0E27", "warn");
-      return;
+      return { ok:false, error:"\u0E08\u0E2D\u0E07\u0E41\u0E25\u0E49\u0E27" };
     }
     if (s.bk.length >= s.cap) {
       showToast("\u0E17\u0E35\u0E48\u0E19\u0E31\u0E48\u0E07\u0E2B\u0E25\u0E31\u0E01\u0E40\u0E15\u0E47\u0E21", "warn");
-      return;
+      return { ok:false, error:"\u0E17\u0E35\u0E48\u0E19\u0E31\u0E48\u0E07\u0E2B\u0E25\u0E31\u0E01\u0E40\u0E15\u0E47\u0E21" };
     }
     // \u2705 \u0E40\u0E0A\u0E47\u0E04\u0E2D\u0E32\u0E22\u0E38\u0E2A\u0E21\u0E32\u0E0A\u0E34\u0E01 vs \u0E27\u0E31\u0E19\u0E17\u0E35\u0E48\u0E04\u0E25\u0E32\u0E2A (\u0E44\u0E21\u0E48\u0E43\u0E0A\u0E48\u0E41\u0E04\u0E48\u0E27\u0E31\u0E19\u0E19\u0E35\u0E49)
     if ((m.membershipType === "monthly" || (!m.membershipType && m.membershipExpiry)) && m.membershipExpiry) {
       const expDate = new Date(String(m.membershipExpiry).split("T")[0]);
       const sessionDate = new Date(s.date);
       if (expDate < sessionDate) {
-        showToast("\u26A0\uFE0F \u0E2A\u0E21\u0E32\u0E0A\u0E34\u0E01\u0E20\u0E32\u0E1E\u0E2B\u0E21\u0E14\u0E2D\u0E32\u0E22\u0E38 " + thFmt(m.membershipExpiry) + " \u2014 \u0E44\u0E21\u0E48\u0E2A\u0E32\u0E21\u0E32\u0E23\u0E16\u0E08\u0E2D\u0E07\u0E04\u0E25\u0E32\u0E2A\u0E27\u0E31\u0E19\u0E17\u0E35\u0E48 " + thFmt(s.date) + " \u0E44\u0E14\u0E49 \u0E01\u0E23\u0E38\u0E13\u0E32\u0E15\u0E48\u0E2D\u0E2D\u0E32\u0E22\u0E38\u0E01\u0E48\u0E2D\u0E19", "err");
-        return;
+        const msg = "\u26A0\uFE0F \u0E2A\u0E21\u0E32\u0E0A\u0E34\u0E01\u0E20\u0E32\u0E1E\u0E2B\u0E21\u0E14\u0E2D\u0E32\u0E22\u0E38 " + thFmt(m.membershipExpiry) + " \u2014 \u0E44\u0E21\u0E48\u0E2A\u0E32\u0E21\u0E32\u0E23\u0E16\u0E08\u0E2D\u0E07\u0E04\u0E25\u0E32\u0E2A\u0E27\u0E31\u0E19\u0E17\u0E35\u0E48 " + thFmt(s.date) + " \u0E44\u0E14\u0E49 \u0E01\u0E23\u0E38\u0E13\u0E32\u0E15\u0E48\u0E2D\u0E2D\u0E32\u0E22\u0E38\u0E01\u0E48\u0E2D\u0E19";
+        showToast(msg, "err");
+        return { ok:false, error: msg };
       }
+    }
+    const res = await postAction("book", { sessionId: sid, memberId: m.id });
+    if (!res.ok) {
+      showToast(res.error || "\u0E1A\u0E31\u0E19\u0E17\u0E36\u0E01\u0E44\u0E21\u0E48\u0E2A\u0E33\u0E40\u0E23\u0E47\u0E08 \u0E25\u0E2D\u0E07\u0E23\u0E35\u0E40\u0E1F\u0E23\u0E0A\u0E2B\u0E19\u0E49\u0E32", "err");
+      return res;
     }
     const ns = __spreadProps(__spreadValues({}, sessions), { [sid]: __spreadProps(__spreadValues({}, s), { bk: [...s.bk, m.id] }) });
     if (m.membershipType === "per_session") {
@@ -3552,21 +3566,20 @@ function App() {
     save("apex_sessions", ns);
     markPendingWrite(sid);
     showToast(`\u2705 \u0E08\u0E2D\u0E07 ${s.name} \u0E2A\u0E33\u0E40\u0E23\u0E47\u0E08!`, "ok");
-    const res = await postAction("book", { sessionId: sid, memberId: m.id });
-    if (!res.ok && !res._offline) showToast(res.error || "\u0E1A\u0E31\u0E19\u0E17\u0E36\u0E01\u0E44\u0E21\u0E48\u0E2A\u0E33\u0E40\u0E23\u0E47\u0E08 \u0E25\u0E2D\u0E07\u0E23\u0E35\u0E40\u0E1F\u0E23\u0E0A\u0E2B\u0E19\u0E49\u0E32", "err");
+    return res;
   }, [auth, members, sessions, showToast, save, postAction]);
   const joinWL = useCallback(async (sid) => {
     const m = members.find((x) => x.id === (auth == null ? void 0 : auth.mid));
-    if (!m) return;
+    if (!m) return { ok:false, error:"\u0E44\u0E21\u0E48\u0E1E\u0E1A\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E2A\u0E21\u0E32\u0E0A\u0E34\u0E01 \u0E01\u0E23\u0E38\u0E13\u0E32\u0E40\u0E02\u0E49\u0E32\u0E2A\u0E39\u0E48\u0E23\u0E30\u0E1A\u0E1A\u0E43\u0E2B\u0E21\u0E48" };
     const s = sessions[sid];
-    if (!s) return;
+    if (!s) return { ok:false, error:"\u0E44\u0E21\u0E48\u0E1E\u0E1A\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E04\u0E25\u0E32\u0E2A\u0E19\u0E35\u0E49 \u0E01\u0E23\u0E38\u0E13\u0E32\u0E23\u0E35\u0E40\u0E1F\u0E23\u0E0A\u0E2B\u0E19\u0E49\u0E32" };
     if (s.wl.includes(m.id)) {
       showToast("\u0E2D\u0E22\u0E39\u0E48\u0E43\u0E19\u0E23\u0E32\u0E22\u0E01\u0E32\u0E23\u0E2A\u0E33\u0E23\u0E2D\u0E07\u0E41\u0E25\u0E49\u0E27", "warn");
-      return;
+      return { ok:false, error:"\u0E2D\u0E22\u0E39\u0E48\u0E43\u0E19\u0E23\u0E32\u0E22\u0E01\u0E32\u0E23\u0E2A\u0E33\u0E23\u0E2D\u0E07\u0E41\u0E25\u0E49\u0E27" };
     }
     if (s.wl.length >= s.wlCap) {
       showToast("\u0E2A\u0E33\u0E23\u0E2D\u0E07\u0E40\u0E15\u0E47\u0E21", "warn");
-      return;
+      return { ok:false, error:"\u0E2A\u0E33\u0E23\u0E2D\u0E07\u0E40\u0E15\u0E47\u0E21" };
     }
     // \u2705 \u0E40\u0E0A\u0E47\u0E04\u0E2D\u0E32\u0E22\u0E38\u0E2A\u0E21\u0E32\u0E0A\u0E34\u0E01 vs \u0E27\u0E31\u0E19\u0E17\u0E35\u0E48\u0E04\u0E25\u0E32\u0E2A \u0E01\u0E48\u0E2D\u0E19\u0E40\u0E02\u0E49\u0E32 waitlist
     if ((m.membershipType === "monthly" || (!m.membershipType && m.membershipExpiry)) && m.membershipExpiry) {
@@ -3660,6 +3673,14 @@ function App() {
     setPendingWL([]);
     showToast("รับทราบ — ส่งต่อที่นั่งให้คนถัดไปแล้ว", "warn");
   }, [auth, postAction, showToast]);
+
+  const onPasswordChanged = useCallback((mid) => {
+    setMembers((prev) => {
+      const nm = prev.map((x) => x.id === mid ? __spreadProps(__spreadValues({}, x), { passwordChanged: true }) : x);
+      save("apex_members", nm);
+      return nm;
+    });
+  }, [save]);
 
   const toggleWlOptIn = useCallback(async (val) => {
     const mid = auth && auth.mid;
@@ -3882,6 +3903,7 @@ function App() {
     });
   }, [save]);
   const login = useCallback(async (a) => {
+    a = __spreadProps(__spreadValues({}, a), { loggedInAt: Date.now() });
     if (a.type === "owner" || a.type === "staff") {
       store.set("apex_auth", a);
       setAuth(a);
@@ -3990,6 +4012,95 @@ function App() {
     return () => { isMounted = false; clearInterval(_tid); document.removeEventListener("visibilitychange", _onVisible); };
   }, [isAdmin]);
 
+  // [FIX 2026-08-09] Stale cache/session invalidation for ALL users (not just admin).
+  // Refetches getAll (cache-busted via _t) on tab focus/visibility-return so long-open
+  // tabs don't keep stale class/session data. Respects isPendingWrite so it never
+  // clobbers a booking/cancel the user just made locally (same guard as the mount merge).
+  useEffect(() => {
+    if (!APPS_SCRIPT_URL) return;
+    let lastRefresh = 0;
+    const doRefresh = async () => {
+      const nowTs = Date.now();
+      if (nowTs - lastRefresh < 30000) return;
+      lastRefresh = nowTs;
+      try {
+        const _r2 = await fetch(APPS_SCRIPT_URL + "?action=getAll&_t=" + nowTs, { signal: AbortSignal.timeout(10000) });
+        const _d2 = await _r2.json();
+        if (!_d2) return;
+        if (_d2.members) { setMembers(_d2.members); store.set("apex_members", _d2.members); }
+        if (_d2.classes) { setClasses(_d2.classes); store.set("apex_classes", _d2.classes); }
+        if (_d2.settings && typeof _d2.settings === "object" && !Array.isArray(_d2.settings)) {
+          const _mergedSettings = Object.assign({}, DEFAULT_SETTINGS, _d2.settings);
+          setSettings(_mergedSettings);
+          store.set("apex_settings", _mergedSettings);
+        }
+        if (_d2.sessions && _d2.classes) {
+          var _clsMap4 = {};
+          (_d2.classes || []).forEach(function(c) { _clsMap4[c.id] = c; });
+          var built = buildSessions(_d2.classes || []);
+          _d2.sessions.forEach(function(s) {
+            var cls = _clsMap4[String(s.classId || "")]; if (!cls) return;
+            var sDate; if (s.date) { var _dv2 = new Date(s.date); if (!isNaN(_dv2.getTime())) { sDate = fmt(_dv2); } else { sDate = String(s.date).replace(/T.*/, "").slice(0, 10); } } else { sDate = ""; }
+            if (!sDate || sDate.length !== 10) return;
+            var tsid = cls.id + "_" + sDate;
+            if (built[tsid]) { built[tsid].bk = healIds(s.bookings); built[tsid].wl = healIds(s.waitlist); }
+          });
+          if (_d2.bookings) _d2.bookings.forEach(function(b) {
+            var sid = String(b.sessionId || "").trim(), mid = String(b.memberId || "").trim();
+            if (built[sid] && mid && (b.type === "main" || !b.type) && built[sid].bk.indexOf(mid) === -1) built[sid].bk.push(mid);
+          });
+          if (_d2.attendance) _d2.attendance.forEach(function(a) {
+            var sid = String(a.sessionId || "").trim(), mid = String(a.memberId || "").trim();
+            if (built[sid] && mid && a.status) built[sid].att[mid] = String(a.status);
+          });
+          setSessions(function(prev) {
+            Object.keys(prev).forEach(function(sid) {
+              if (built[sid] && prev[sid] && prev[sid].att) {
+                Object.keys(prev[sid].att).forEach(function(mid) { if (!built[sid].att[mid]) built[sid].att[mid] = prev[sid].att[mid]; });
+              }
+              if (built[sid] && isPendingWrite(sid) && prev[sid]) {
+                built[sid].bk = prev[sid].bk;
+                built[sid].wl = prev[sid].wl;
+              }
+            });
+            store.set("apex_sessions", built);
+            return built;
+          });
+        }
+      } catch (_e2) { console.log("refresh:", _e2.message); }
+    };
+    const onWake = () => {
+      if (document.visibilityState !== "visible") return;
+      doRefresh();
+    };
+    document.addEventListener("visibilitychange", onWake);
+    window.addEventListener("focus", onWake);
+    return () => {
+      document.removeEventListener("visibilitychange", onWake);
+      window.removeEventListener("focus", onWake);
+    };
+  }, [APPS_SCRIPT_URL]);
+
+  // [FIX 2026-08-09] 24h session staleness: touch loggedInAt so a long-idle login
+  // is treated as re-validated once the tab becomes active again (member profile
+  // itself is refreshed by the effect above via setMembers on every wake).
+  useEffect(() => {
+    if (!auth || !auth.mid) return;
+    if (auth.loggedInAt && Date.now() - auth.loggedInAt < 24 * 3600 * 1000) return;
+    const checkStale = () => {
+      if (document.visibilityState !== "visible") return;
+      const na = __spreadProps(__spreadValues({}, auth), { loggedInAt: Date.now() });
+      store.set("apex_auth", na);
+      setAuth(na);
+    };
+    document.addEventListener("visibilitychange", checkStale);
+    window.addEventListener("focus", checkStale);
+    return () => {
+      document.removeEventListener("visibilitychange", checkStale);
+      window.removeEventListener("focus", checkStale);
+    };
+  }, [auth]);
+
 const unreadCount = useMemo(() => cur ? (notifications || []).filter((n) => n.mid === cur.id && !n.read).length : 0, [notifications, cur]);
   // [v4.3] badge สำหรับ notiflog — นับ event ใน checkinLog ที่ใหม่กว่า lastSeenNotifTs
   const [lastSeenNotifTs, setLastSeenNotifTs] = useState(() => {
@@ -4055,7 +4166,7 @@ const unreadCount = useMemo(() => cur ? (notifications || []).filter((n) => n.mi
           React.createElement("option", { value: "ko" }, "🇰🇷 한국어"),
           React.createElement("option", { value: "ja" }, "🇯🇵 日本語")
         ),
-        /* @__PURE__ */ React.createElement(ThemeToggle, { dark, toggle: toggleTheme, style: { padding: "4px 8px", fontSize: 11 } }), /* @__PURE__ */ React.createElement("button", { onClick: logout, style: { background: C2.surf, border: `1px solid ${C2.border}`, borderRadius: 9, padding: "5px 10px", color: C2.muted, fontSize: 12, cursor: "pointer", fontFamily: FONT } }, "\u0E2D\u0E2D\u0E01")))), /* @__PURE__ */ React.createElement("div", { style: { padding: "14px 14px", paddingBottom: 90, minHeight: "calc(100vh - 56px)" } }, isAdmin ? /* @__PURE__ */ React.createElement(React.Fragment, null, view === "overview" && /* @__PURE__ */ React.createElement(AdminDashboard, { members, sessions, classes, guestBookings }), view === "attend" && /* @__PURE__ */ React.createElement(AdminAttendance, { sessions, members, guestBookings, onMark: markAtt, onPromoteWL: promoteWL, onAdminCancel: adminCancel, postAction, showToast }), view === "kiosk" && /* @__PURE__ */ React.createElement(KioskView, { members, sessions, onKioskBook: kioskBook, onKioskCheckin: kioskCheckin, showToast }), view === "walkin" && /* @__PURE__ */ React.createElement(AdminWalkIn, { guestBookings, onConfirm: confirmGuestPayment, showToast }), view === "members" && /* @__PURE__ */ React.createElement(AdminMembers, { members, sessions, settings, onSaveMember: saveMember, onUnlockDevice: unlockDevice, showToast, onUpdatePhone: updateMemberPhone, onKioskBook: kioskBook }), view === "expiring" && /* @__PURE__ */ React.createElement(AdminExpiringMembers, { members }), view === "adminfeedback" && /* @__PURE__ */ React.createElement(AdminFeedback, { feedback, onResolve: resolveFeedback, showToast }), view === "notiflog" && /* @__PURE__ */ React.createElement(AdminNotifLog, { notifications, members, checkinLog, onSeen: markNotifLogSeen }), view === "reports" && /* @__PURE__ */ React.createElement(AdminReports, { sessions, members, classes, showToast, postAction }), view === "settings" && /* @__PURE__ */ React.createElement(AdminSettings, { settings, onSave: saveSettings, members, onUnlockDevice: unlockDevice, showToast, onUploadImage: uploadImage, postAction, etiquetteRules, onSaveEtiquette: saveEtiquette }), view === "staffmgmt" && /* @__PURE__ */ React.createElement(AdminStaffManagement, { staff, postAction, showToast })) : /* @__PURE__ */ React.createElement(React.Fragment, null, view === "schedule" && /* @__PURE__ */ React.createElement(ScheduleView, { sessions, member: cur, settings, onBook: book, onWaitlist: joinWL, onCancel: cancel, onCancelWL: cancelWL, onToggleWlOptIn: toggleWlOptIn }), view === "myBookings" && /* @__PURE__ */ React.createElement(MyBookingsView, { sessions, member: cur, settings, onCancel: cancel, onCancelWL: cancelWL, onCheckin: checkin, pendingWL, onConfirmWL: confirmWLSpot, onDeclineWL: declineWLSpot }), view === "checkin" && /* @__PURE__ */ React.createElement(CheckinView, { sessions, member: cur, settings, onCheckin: checkin }), view === "notifs" && /* @__PURE__ */ React.createElement(NotificationsView, { notifications, member: cur, onRead: markNotifRead }), view === "feedback" && /* @__PURE__ */ React.createElement(FeedbackView, { member: cur, feedback, onSubmit: submitFeedback, showToast, etiquetteRules }), view === "profile" && /* @__PURE__ */ React.createElement(ProfileView, { member: cur, sessions, settings, onUploadPhoto: uploadMemberPhoto, onToggleWlOptIn: toggleWlOptIn }))), /* @__PURE__ */ React.createElement("div", { className: "apex-nav", style: { position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 440, background: C2.surf, borderTop: `1px solid ${C2.border}`, padding: "8px 0 18px", display: "flex", justifyContent: "space-around", alignItems: "flex-end", zIndex: 50 } },
+        /* @__PURE__ */ React.createElement(ThemeToggle, { dark, toggle: toggleTheme, style: { padding: "4px 8px", fontSize: 11 } }), /* @__PURE__ */ React.createElement("button", { onClick: logout, style: { background: C2.surf, border: `1px solid ${C2.border}`, borderRadius: 9, padding: "5px 10px", color: C2.muted, fontSize: 12, cursor: "pointer", fontFamily: FONT } }, "\u0E2D\u0E2D\u0E01")))), /* @__PURE__ */ React.createElement("div", { style: { padding: "14px 14px", paddingBottom: 90, minHeight: "calc(100vh - 56px)" } }, isAdmin ? /* @__PURE__ */ React.createElement(React.Fragment, null, view === "overview" && /* @__PURE__ */ React.createElement(AdminDashboard, { members, sessions, classes, guestBookings }), view === "attend" && /* @__PURE__ */ React.createElement(AdminAttendance, { sessions, members, guestBookings, onMark: markAtt, onPromoteWL: promoteWL, onAdminCancel: adminCancel, postAction, showToast }), view === "kiosk" && /* @__PURE__ */ React.createElement(KioskView, { members, sessions, onKioskBook: kioskBook, onKioskCheckin: kioskCheckin, showToast }), view === "walkin" && /* @__PURE__ */ React.createElement(AdminWalkIn, { guestBookings, onConfirm: confirmGuestPayment, showToast }), view === "members" && /* @__PURE__ */ React.createElement(AdminMembers, { members, sessions, settings, onSaveMember: saveMember, onUnlockDevice: unlockDevice, showToast, onUpdatePhone: updateMemberPhone, onKioskBook: kioskBook }), view === "expiring" && /* @__PURE__ */ React.createElement(AdminExpiringMembers, { members }), view === "adminfeedback" && /* @__PURE__ */ React.createElement(AdminFeedback, { feedback, onResolve: resolveFeedback, showToast }), view === "notiflog" && /* @__PURE__ */ React.createElement(AdminNotifLog, { notifications, members, checkinLog, onSeen: markNotifLogSeen }), view === "reports" && /* @__PURE__ */ React.createElement(AdminReports, { sessions, members, classes, showToast, postAction }), view === "settings" && /* @__PURE__ */ React.createElement(AdminSettings, { settings, onSave: saveSettings, members, onUnlockDevice: unlockDevice, showToast, onUploadImage: uploadImage, postAction, etiquetteRules, onSaveEtiquette: saveEtiquette }), view === "staffmgmt" && /* @__PURE__ */ React.createElement(AdminStaffManagement, { staff, postAction, showToast })) : /* @__PURE__ */ React.createElement(React.Fragment, null, view === "schedule" && /* @__PURE__ */ React.createElement(ScheduleView, { sessions, member: cur, settings, onBook: book, onWaitlist: joinWL, onCancel: cancel, onCancelWL: cancelWL, onToggleWlOptIn: toggleWlOptIn }), view === "myBookings" && /* @__PURE__ */ React.createElement(MyBookingsView, { sessions, member: cur, settings, onCancel: cancel, onCancelWL: cancelWL, onCheckin: checkin, pendingWL, onConfirmWL: confirmWLSpot, onDeclineWL: declineWLSpot }), view === "checkin" && /* @__PURE__ */ React.createElement(CheckinView, { sessions, member: cur, settings, onCheckin: checkin }), view === "notifs" && /* @__PURE__ */ React.createElement(NotificationsView, { notifications, member: cur, onRead: markNotifRead }), view === "feedback" && /* @__PURE__ */ React.createElement(FeedbackView, { member: cur, feedback, onSubmit: submitFeedback, showToast, etiquetteRules }), view === "profile" && /* @__PURE__ */ React.createElement(ProfileView, { member: cur, sessions, settings, onUploadPhoto: uploadMemberPhoto, onToggleWlOptIn: toggleWlOptIn, onPasswordChanged }))), /* @__PURE__ */ React.createElement("div", { className: "apex-nav", style: { position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 440, background: C2.surf, borderTop: `1px solid ${C2.border}`, padding: "8px 0 18px", display: "flex", justifyContent: "space-around", alignItems: "flex-end", zIndex: 50 } },
     isAdmin ? (() => {
       const PRIMARY = NAV.slice(0, 4);
       const MORE = NAV.slice(4);
