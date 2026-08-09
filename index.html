@@ -3668,12 +3668,12 @@ function App() {
     // mirrors book()/joinWL(). Previously this cancelled optimistically and only
     // toasted the error afterward with no rollback, so a rejected cancel still
     // looked cancelled on screen.
-    const res = await postAction("cancel", { sessionId: sid, memberId: mid });
+    const res = await postAction("cancel", { sessionId: sid, memberId: String(mid) });
     if (!res.ok) {
       showToast(res.error || "บันทึกไม่สำเร็จ ลองรีเฟรชหน้า", "err");
       return res;
     }
-    let newBk = s.bk.filter((x) => x !== mid), newWl = [...s.wl], promoted = null;
+    let newBk = s.bk.filter((x) => String(x) !== String(mid)), newWl = [...s.wl], promoted = null;
     if (newWl.length > 0 && newBk.length < s.cap) {
       promoted = newWl.shift(); // WL gets pending confirmation, not instant promo
     }
@@ -3703,12 +3703,12 @@ function App() {
     const mid = auth == null ? void 0 : auth.mid;
     const s = sessions[sid];
     if (!s) return { ok:false, error:"\u0E44\u0E21\u0E48\u0E1E\u0E1A\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E04\u0E25\u0E32\u0E2A\u0E19\u0E35\u0E49 \u0E01\u0E23\u0E38\u0E13\u0E32\u0E23\u0E35\u0E40\u0E1F\u0E23\u0E0A\u0E2B\u0E19\u0E49\u0E32" };
-    const res = await postAction("cancelWaitlist", { sessionId: sid, memberId: mid });
+    const res = await postAction("cancelWaitlist", { sessionId: sid, memberId: String(mid) });
     if (!res.ok) {
       showToast(res.error || "\u0E1A\u0E31\u0E19\u0E17\u0E36\u0E01\u0E44\u0E21\u0E48\u0E2A\u0E33\u0E40\u0E23\u0E47\u0E08", "err");
       return res;
     }
-    const ns = __spreadProps(__spreadValues({}, sessions), { [sid]: __spreadProps(__spreadValues({}, s), { wl: s.wl.filter((x) => x !== mid) }) });
+    const ns = __spreadProps(__spreadValues({}, sessions), { [sid]: __spreadProps(__spreadValues({}, s), { wl: s.wl.filter((x) => String(x) !== String(mid)) }) });
     setSessions(ns);
     save("apex_sessions", ns);
     showToast("\u0E2D\u0E2D\u0E01\u0E08\u0E32\u0E01\u0E23\u0E32\u0E22\u0E01\u0E32\u0E23\u0E2A\u0E33\u0E23\u0E2D\u0E07\u0E41\u0E25\u0E49\u0E27", "warn");
@@ -3863,7 +3863,7 @@ function App() {
     setSessions(ns); save("apex_sessions", ns);
     const m = members.find((x) => String(x.id).trim() === String(mid).trim() || (x.lineUserId && String(x.lineUserId).trim() === String(mid).trim()));
     showToast(`✅ ยกเลิกการจองของ ${(m == null ? void 0 : m.name) || mid} แล้ว${promoted ? " — เลื่อนคิวสำรองขึ้นอัตโนมัติ" : ""}`, "ok");
-    await postAction("cancel", { sessionId: sid, memberId: mid });
+    await postAction("cancel", { sessionId: sid, memberId: String(mid) });
   }, [sessions, members, showToast, save, postAction]);
   const saveMember = useCallback(async (newM) => {
     const nm = members.some((m) => m.id === newM.id) ? members.map((m) => m.id === newM.id ? newM : m) : [...members, newM];
