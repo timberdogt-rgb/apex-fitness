@@ -1779,12 +1779,18 @@ function ScheduleView({ sessions, member, settings, onBook, onWaitlist, onCancel
     const res = await onWaitlist(modal.sid);
     setSubmitting(false);
     if (res && res.ok !== false) setModal(null);
-  }, full: true }))), modal.kind === "cancelMain" && /* @__PURE__ */ React.createElement("div", { style: { textAlign: "center" } }, /* @__PURE__ */ React.createElement("div", { style: { fontSize: 40, marginBottom: 10 } }, "\u{1F5D1}\uFE0F"), /* @__PURE__ */ React.createElement("div", { style: { color: C.text, fontWeight: 800, fontSize: 18, marginBottom: 8 } }, _t("cancelConfirmTitle")), /* @__PURE__ */ React.createElement("div", { style: { color: C.muted, fontSize: 14, marginBottom: 8 } }, modal.name), modal.lateCancel && /* @__PURE__ */ React.createElement("div", { style: { background: C.rM, border: `1px solid ${C.red}`, borderRadius: 10, padding: "10px 14px", marginBottom: 14, fontSize: 12, color: C.red, lineHeight: 1.6, textAlign: "left" } }, _t("lateWarn") + " ", /* @__PURE__ */ React.createElement("strong", null, _t("noShow")), " \u0E40\u0E1E\u0E23\u0E32\u0E30\u0E40\u0E2B\u0E25\u0E37\u0E2D\u0E40\u0E27\u0E25\u0E32\u0E19\u0E49\u0E2D\u0E22\u0E01\u0E27\u0E48\u0E32 ", settings.cancelHoursLimit, " \u0E0A\u0E21. \u0E01\u0E48\u0E2D\u0E19\u0E04\u0E25\u0E32\u0E2A\u0E40\u0E23\u0E34\u0E48\u0E21"), modal.hasWL && /* @__PURE__ */ React.createElement("div", { style: { background: C.bM, borderRadius: 10, padding: "10px 14px", marginBottom: 14, fontSize: 12, color: C.blue } }, _t("wlNotify")), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 10 } }, /* @__PURE__ */ React.createElement(Btn, { label: _t("keepBooking"), bg: C.surf, col: C.muted, onClick: () => setModal(null), full: true }), /* @__PURE__ */ React.createElement(Btn, { label: _t("confirmCancelBtn"), bg: C.red, onClick: () => {
-    onCancel(modal.sid);
-    setModal(null);
-  }, full: true }))), modal.kind === "cancelWL" && /* @__PURE__ */ React.createElement("div", { style: { textAlign: "center" } }, /* @__PURE__ */ React.createElement("div", { style: { fontSize: 40, marginBottom: 10 } }, "\u{1F5D1}\uFE0F"), /* @__PURE__ */ React.createElement("div", { style: { color: C.text, fontWeight: 800, fontSize: 17, marginBottom: 8 } }, _t("leaveWLTitle")), /* @__PURE__ */ React.createElement("div", { style: { color: C.muted, fontSize: 14, marginBottom: 20 } }, modal.name), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 10 } }, /* @__PURE__ */ React.createElement(Btn, { label: _t("noBtn"), bg: C.surf, col: C.muted, onClick: () => setModal(null), full: true }), /* @__PURE__ */ React.createElement(Btn, { label: _t("yesBtn"), bg: C.amber, onClick: () => {
-    onCancelWL(modal.sid);
-    setModal(null);
+  }, full: true }))), modal.kind === "cancelMain" && /* @__PURE__ */ React.createElement("div", { style: { textAlign: "center" } }, /* @__PURE__ */ React.createElement("div", { style: { fontSize: 40, marginBottom: 10 } }, "\u{1F5D1}\uFE0F"), /* @__PURE__ */ React.createElement("div", { style: { color: C.text, fontWeight: 800, fontSize: 18, marginBottom: 8 } }, _t("cancelConfirmTitle")), /* @__PURE__ */ React.createElement("div", { style: { color: C.muted, fontSize: 14, marginBottom: 8 } }, modal.name), modal.lateCancel && /* @__PURE__ */ React.createElement("div", { style: { background: C.rM, border: `1px solid ${C.red}`, borderRadius: 10, padding: "10px 14px", marginBottom: 14, fontSize: 12, color: C.red, lineHeight: 1.6, textAlign: "left" } }, _t("lateWarn") + " ", /* @__PURE__ */ React.createElement("strong", null, _t("noShow")), " \u0E40\u0E1E\u0E23\u0E32\u0E30\u0E40\u0E2B\u0E25\u0E37\u0E2D\u0E40\u0E27\u0E25\u0E32\u0E19\u0E49\u0E2D\u0E22\u0E01\u0E27\u0E48\u0E32 ", settings.cancelHoursLimit, " \u0E0A\u0E21. \u0E01\u0E48\u0E2D\u0E19\u0E04\u0E25\u0E32\u0E2A\u0E40\u0E23\u0E34\u0E48\u0E21"), modal.hasWL && /* @__PURE__ */ React.createElement("div", { style: { background: C.bM, borderRadius: 10, padding: "10px 14px", marginBottom: 14, fontSize: 12, color: C.blue } }, _t("wlNotify")), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 10 } }, /* @__PURE__ */ React.createElement(Btn, { label: _t("keepBooking"), bg: C.surf, col: C.muted, disabled: submitting, onClick: () => { if (!submitting) setModal(null); }, full: true }), /* @__PURE__ */ React.createElement(Btn, { label: submitting ? "กำลังยกเลิก..." : _t("confirmCancelBtn"), bg: C.red, disabled: submitting, onClick: async () => {
+    if (submitting) return;
+    setSubmitting(true);
+    const res = await onCancel(modal.sid);
+    setSubmitting(false);
+    if (res && res.ok !== false) setModal(null);
+  }, full: true }))), modal.kind === "cancelWL" && /* @__PURE__ */ React.createElement("div", { style: { textAlign: "center" } }, /* @__PURE__ */ React.createElement("div", { style: { fontSize: 40, marginBottom: 10 } }, "\u{1F5D1}\uFE0F"), /* @__PURE__ */ React.createElement("div", { style: { color: C.text, fontWeight: 800, fontSize: 17, marginBottom: 8 } }, _t("leaveWLTitle")), /* @__PURE__ */ React.createElement("div", { style: { color: C.muted, fontSize: 14, marginBottom: 20 } }, modal.name), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 10 } }, /* @__PURE__ */ React.createElement(Btn, { label: _t("noBtn"), bg: C.surf, col: C.muted, disabled: submitting, onClick: () => { if (!submitting) setModal(null); }, full: true }), /* @__PURE__ */ React.createElement(Btn, { label: submitting ? "กำลังยกเลิก..." : _t("yesBtn"), bg: C.amber, disabled: submitting, onClick: async () => {
+    if (submitting) return;
+    setSubmitting(true);
+    const res = await onCancelWL(modal.sid);
+    setSubmitting(false);
+    if (res && res.ok !== false) setModal(null);
   }, full: true }))), modal.kind === "fullContact" && /* @__PURE__ */ React.createElement(FullContactCard, { settings, session: modal.session, onClose: () => setModal(null) }), modal.kind === "membership" && /* @__PURE__ */ React.createElement(MembershipAlert, { member, settings, onClose: () => setModal(null) })));
 }
 function WLPendingBanner({ pendingWL, onConfirmWL, onDeclineWL }) {
@@ -1838,6 +1844,7 @@ function WLPendingBanner({ pendingWL, onConfirmWL, onDeclineWL }) {
 function MyBookingsView({ sessions, member, settings, onCancel, onCancelWL, onCheckin, pendingWL, onConfirmWL, onDeclineWL }) {
   const ts = fmt(TODAY);
   const [modal, setModal] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
   const mainBk = useMemo(() => Object.values(sessions).filter((s) => s.bk.includes(member.id)).sort((a, b) => a.date !== b.date ? a.date.localeCompare(b.date) : a.t.localeCompare(b.t)), [sessions, member]);
   const wlBk = useMemo(() => Object.values(sessions).filter((s) => s.wl.includes(member.id)).sort((a, b) => a.date.localeCompare(b.date)), [sessions, member]);
   const Card = ({ s, type }) => {
@@ -1853,9 +1860,12 @@ function MyBookingsView({ sessions, member, settings, onCancel, onCancelWL, onCh
   if (!mainBk.length && !wlBk.length) return /* @__PURE__ */ React.createElement("div", { style: { textAlign: "center", padding: "80px 20px", color: C.muted } }, /* @__PURE__ */ React.createElement("div", { style: { fontSize: 48, marginBottom: 12 } }, "\u{1F3AB}"), /* @__PURE__ */ React.createElement("div", { style: { fontSize: 16, color: C.sub } }, _t("noBookings")));
   return React.createElement("div", null,
     React.createElement(WLPendingBanner, { pendingWL, onConfirmWL, onDeclineWL }),
-    mainBk.length > 0 && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { style: { color: C.muted, fontSize: 11, fontWeight: 700, letterSpacing: 2, marginBottom: 10 } }, "\u0E01\u0E32\u0E23\u0E08\u0E2D\u0E07\u0E2B\u0E25\u0E31\u0E01 (", mainBk.length, ")"), mainBk.map((s) => /* @__PURE__ */ React.createElement(Card, { key: s.id, s, type: "main" }))), wlBk.length > 0 && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { style: { color: C.amber, fontSize: 11, fontWeight: 700, letterSpacing: 2, marginBottom: 10, marginTop: 16 } }, "\u0E17\u0E35\u0E48\u0E19\u0E31\u0E48\u0E07\u0E2A\u0E33\u0E23\u0E2D\u0E07 (", wlBk.length, ")"), wlBk.map((s) => /* @__PURE__ */ React.createElement(Card, { key: s.id, s, type: "wl" }))), modal && /* @__PURE__ */ React.createElement(Overlay, { onClose: () => setModal(null) }, /* @__PURE__ */ React.createElement("div", { style: { textAlign: "center" } }, /* @__PURE__ */ React.createElement("div", { style: { fontSize: 40, marginBottom: 10 } }, "\u{1F5D1}\uFE0F"), /* @__PURE__ */ React.createElement("div", { style: { color: C.text, fontWeight: 800, fontSize: 17, marginBottom: 8 } }, modal.kind === "cancelWL" ? _t("leaveWLTitle") : _t("cancelConfirmTitle")), /* @__PURE__ */ React.createElement("div", { style: { color: C.muted, marginBottom: modal.hasWL ? 12 : 20 } }, modal.name), modal.lateCancel && /* @__PURE__ */ React.createElement("div", { style: { background: C.rM, border: `1px solid ${C.red}`, borderRadius: 10, padding: "10px 14px", marginBottom: 14, fontSize: 12, color: C.red, lineHeight: 1.6, textAlign: "left" } }, "\u26A0\uFE0F \u0E22\u0E01\u0E40\u0E25\u0E34\u0E01\u0E15\u0E2D\u0E19\u0E19\u0E35\u0E49\u0E08\u0E30\u0E19\u0E31\u0E1A\u0E40\u0E1B\u0E47\u0E19 No-show \u0E40\u0E1E\u0E23\u0E32\u0E30\u0E40\u0E2B\u0E25\u0E37\u0E2D\u0E40\u0E27\u0E25\u0E32\u0E19\u0E49\u0E2D\u0E22\u0E01\u0E27\u0E48\u0E32 ", settings.cancelHoursLimit, " \u0E0A\u0E21."), modal.hasWL && /* @__PURE__ */ React.createElement("div", { style: { background: C.bM, borderRadius: 10, padding: "10px 14px", marginBottom: 20, fontSize: 12, color: C.blue } }, "\u{1F4A1} \u0E21\u0E35\u0E04\u0E19\u0E23\u0E2D\u0E2A\u0E33\u0E23\u0E2D\u0E07 \u2014 \u0E23\u0E30\u0E1A\u0E1A\u0E08\u0E30\u0E41\u0E08\u0E49\u0E07\u0E41\u0E25\u0E30\u0E40\u0E25\u0E37\u0E48\u0E2D\u0E19\u0E17\u0E35\u0E48\u0E19\u0E31\u0E48\u0E07\u0E2D\u0E31\u0E15\u0E42\u0E19\u0E21\u0E31\u0E15\u0E34"), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 10 } }, /* @__PURE__ */ React.createElement(Btn, { label: _t("noBtn"), bg: C.surf, col: C.muted, onClick: () => setModal(null), full: true }), /* @__PURE__ */ React.createElement(Btn, { label: "\u0E22\u0E37\u0E19\u0E22\u0E31\u0E19", bg: modal.kind === "cancelWL" ? C.amber : C.red, onClick: () => {
-    modal.kind === "cancelWL" ? onCancelWL(modal.sid) : onCancel(modal.sid);
-    setModal(null);
+    mainBk.length > 0 && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { style: { color: C.muted, fontSize: 11, fontWeight: 700, letterSpacing: 2, marginBottom: 10 } }, "\u0E01\u0E32\u0E23\u0E08\u0E2D\u0E07\u0E2B\u0E25\u0E31\u0E01 (", mainBk.length, ")"), mainBk.map((s) => /* @__PURE__ */ React.createElement(Card, { key: s.id, s, type: "main" }))), wlBk.length > 0 && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { style: { color: C.amber, fontSize: 11, fontWeight: 700, letterSpacing: 2, marginBottom: 10, marginTop: 16 } }, "\u0E17\u0E35\u0E48\u0E19\u0E31\u0E48\u0E07\u0E2A\u0E33\u0E23\u0E2D\u0E07 (", wlBk.length, ")"), wlBk.map((s) => /* @__PURE__ */ React.createElement(Card, { key: s.id, s, type: "wl" }))), modal && /* @__PURE__ */ React.createElement(Overlay, { onClose: () => { if (!submitting) setModal(null); } }, /* @__PURE__ */ React.createElement("div", { style: { textAlign: "center" } }, /* @__PURE__ */ React.createElement("div", { style: { fontSize: 40, marginBottom: 10 } }, "\u{1F5D1}\uFE0F"), /* @__PURE__ */ React.createElement("div", { style: { color: C.text, fontWeight: 800, fontSize: 17, marginBottom: 8 } }, modal.kind === "cancelWL" ? _t("leaveWLTitle") : _t("cancelConfirmTitle")), /* @__PURE__ */ React.createElement("div", { style: { color: C.muted, marginBottom: modal.hasWL ? 12 : 20 } }, modal.name), modal.lateCancel && /* @__PURE__ */ React.createElement("div", { style: { background: C.rM, border: `1px solid ${C.red}`, borderRadius: 10, padding: "10px 14px", marginBottom: 14, fontSize: 12, color: C.red, lineHeight: 1.6, textAlign: "left" } }, "\u26A0\uFE0F \u0E22\u0E01\u0E40\u0E25\u0E34\u0E01\u0E15\u0E2D\u0E19\u0E19\u0E35\u0E49\u0E08\u0E30\u0E19\u0E31\u0E1A\u0E40\u0E1B\u0E47\u0E19 No-show \u0E40\u0E1E\u0E23\u0E32\u0E30\u0E40\u0E2B\u0E25\u0E37\u0E2D\u0E40\u0E27\u0E25\u0E32\u0E19\u0E49\u0E2D\u0E22\u0E01\u0E27\u0E48\u0E32 ", settings.cancelHoursLimit, " \u0E0A\u0E21."), modal.hasWL && /* @__PURE__ */ React.createElement("div", { style: { background: C.bM, borderRadius: 10, padding: "10px 14px", marginBottom: 20, fontSize: 12, color: C.blue } }, "\u{1F4A1} \u0E21\u0E35\u0E04\u0E19\u0E23\u0E2D\u0E2A\u0E33\u0E23\u0E2D\u0E07 \u2014 \u0E23\u0E30\u0E1A\u0E1A\u0E08\u0E30\u0E41\u0E08\u0E49\u0E07\u0E41\u0E25\u0E30\u0E40\u0E25\u0E37\u0E48\u0E2D\u0E19\u0E17\u0E35\u0E48\u0E19\u0E31\u0E48\u0E07\u0E2D\u0E31\u0E15\u0E42\u0E19\u0E21\u0E31\u0E15\u0E34"), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 10 } }, /* @__PURE__ */ React.createElement(Btn, { label: _t("noBtn"), bg: C.surf, col: C.muted, disabled: submitting, onClick: () => { if (!submitting) setModal(null); }, full: true }), /* @__PURE__ */ React.createElement(Btn, { label: submitting ? "\u0E01\u0E33\u0E25\u0E31\u0E07\u0E22\u0E01\u0E40\u0E25\u0E34\u0E01..." : "\u0E22\u0E37\u0E19\u0E22\u0E31\u0E19", bg: modal.kind === "cancelWL" ? C.amber : C.red, disabled: submitting, onClick: async () => {
+    if (submitting) return;
+    setSubmitting(true);
+    const res = modal.kind === "cancelWL" ? await onCancelWL(modal.sid) : await onCancel(modal.sid);
+    setSubmitting(false);
+    if (res && res.ok !== false) setModal(null);
   }, full: true })))));
 }
 function CheckinView({ sessions, member, settings, onCheckin }) {
@@ -3195,6 +3205,7 @@ function App() {
   // ✅ sync _apexLang synchronously in render — fixes 1-render lag on lang switch
   window._apexLang = lang;
   const [loading, setLoading] = useState(true);
+  const [todayTick, setTodayTick] = useState(0); // [FIX 2026-08-09] bumped whenever TODAY is mutated, to force a re-render
   const [deviceId, setDeviceId] = useState(null);
   const [auth, setAuth] = useState(null);
   const [members, setMembers] = useState([]);
@@ -3602,7 +3613,16 @@ function App() {
   const cancel = useCallback(async (sid) => {
     const mid = auth == null ? void 0 : auth.mid;
     const s = sessions[sid];
-    if (!s) return;
+    if (!s) return { ok:false, error:"ไม่พบข้อมูลคลาสนี้ กรุณารีเฟรชหน้า" };
+    // [FIX 2026-08-09] Await server confirmation before touching local state/UI —
+    // mirrors book()/joinWL(). Previously this cancelled optimistically and only
+    // toasted the error afterward with no rollback, so a rejected cancel still
+    // looked cancelled on screen.
+    const res = await postAction("cancel", { sessionId: sid, memberId: mid });
+    if (!res.ok) {
+      showToast(res.error || "บันทึกไม่สำเร็จ ลองรีเฟรชหน้า", "err");
+      return res;
+    }
     let newBk = s.bk.filter((x) => x !== mid), newWl = [...s.wl], promoted = null;
     if (newWl.length > 0 && newBk.length < s.cap) {
       promoted = newWl.shift(); // WL gets pending confirmation, not instant promo
@@ -3615,8 +3635,7 @@ function App() {
       showToast(`✅ ยกเลิกแล้ว — แจ้ง ${(pm == null ? void 0 : pm.name) || "สมาชิก"} ในสำรองให้ยืนยันภายใน 45 นาที`, "line");
     } else showToast("ยกเลิกการจองแล้ว", "warn");
     markPendingWrite(sid);
-    const res = await postAction("cancel", { sessionId: sid, memberId: mid });
-    if (res.ok && res.lateCancel) {
+    if (res.lateCancel) {
       showToast("\u26A0\uFE0F \u0E22\u0E01\u0E40\u0E25\u0E34\u0E01\u0E43\u0E01\u0E25\u0E49\u0E40\u0E27\u0E25\u0E32\u0E40\u0E01\u0E34\u0E19\u0E44\u0E1B \u0E19\u0E31\u0E1A\u0E40\u0E1B\u0E47\u0E19 No-show", "err");
       setMembers((pm) => {
         const nm = pm.map((m) => m.id === mid ? __spreadProps(__spreadValues({}, m), {
@@ -3627,19 +3646,24 @@ function App() {
         save("apex_members", nm);
         return nm;
       });
-    } else if (!res.ok && !res._offline) showToast(res.error || "\u0E1A\u0E31\u0E19\u0E17\u0E36\u0E01\u0E44\u0E21\u0E48\u0E2A\u0E33\u0E40\u0E23\u0E47\u0E08 \u0E25\u0E2D\u0E07\u0E23\u0E35\u0E40\u0E1F\u0E23\u0E0A\u0E2B\u0E19\u0E49\u0E32", "err");
+    }
+    return res;
   }, [auth, sessions, members, showToast, save, pushNotif, postAction]);
   const cancelWL = useCallback(async (sid) => {
     const mid = auth == null ? void 0 : auth.mid;
     const s = sessions[sid];
-    if (!s) return;
+    if (!s) return { ok:false, error:"\u0E44\u0E21\u0E48\u0E1E\u0E1A\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E04\u0E25\u0E32\u0E2A\u0E19\u0E35\u0E49 \u0E01\u0E23\u0E38\u0E13\u0E32\u0E23\u0E35\u0E40\u0E1F\u0E23\u0E0A\u0E2B\u0E19\u0E49\u0E32" };
+    const res = await postAction("cancelWaitlist", { sessionId: sid, memberId: mid });
+    if (!res.ok) {
+      showToast(res.error || "\u0E1A\u0E31\u0E19\u0E17\u0E36\u0E01\u0E44\u0E21\u0E48\u0E2A\u0E33\u0E40\u0E23\u0E47\u0E08", "err");
+      return res;
+    }
     const ns = __spreadProps(__spreadValues({}, sessions), { [sid]: __spreadProps(__spreadValues({}, s), { wl: s.wl.filter((x) => x !== mid) }) });
     setSessions(ns);
     save("apex_sessions", ns);
     showToast("\u0E2D\u0E2D\u0E01\u0E08\u0E32\u0E01\u0E23\u0E32\u0E22\u0E01\u0E32\u0E23\u0E2A\u0E33\u0E23\u0E2D\u0E07\u0E41\u0E25\u0E49\u0E27", "warn");
     markPendingWrite(sid);
-    const res = await postAction("cancelWaitlist", { sessionId: sid, memberId: mid });
-    if (!res.ok && !res._offline) showToast(res.error || "\u0E1A\u0E31\u0E19\u0E17\u0E36\u0E01\u0E44\u0E21\u0E48\u0E2A\u0E33\u0E40\u0E23\u0E47\u0E08", "err");
+    return res;
   }, [auth, sessions, showToast, save, postAction]);
   const checkin = useCallback(async (sid) => {
     const mid = auth == null ? void 0 : auth.mid;
@@ -4071,6 +4095,14 @@ function App() {
     };
     const onWake = () => {
       if (document.visibilityState !== "visible") return;
+      // [FIX 2026-08-09] Audit finding: TODAY was a module-level const computed once
+      // at page load and never refreshed — a tab left open across midnight (or for
+      // days) would show the wrong "today" in DayStrip/expiry/no-show checks even
+      // after the data-refresh above. Mutate it in place (const only locks the
+      // binding, not the Date object) and force a re-render unconditionally so this
+      // corrects itself even if the network refresh below fails.
+      TODAY.setTime(Date.now());
+      setTodayTick((t) => t + 1);
       doRefresh();
     };
     document.addEventListener("visibilitychange", onWake);
