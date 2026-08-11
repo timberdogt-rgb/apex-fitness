@@ -420,9 +420,20 @@ body.apex-light {
     /* Bottom nav: iPhone safe-area */
     .apex-nav {
       padding-bottom: max(env(safe-area-inset-bottom), 8px) !important;
+      /* Force own compositor layer: keeps fixed-position hit-testing in sync
+         with the visual viewport on iOS Safari (prevents "tap above button" offset). */
+      transform: translateZ(0);
+      -webkit-transform: translateZ(0);
+      will-change: transform;
     }
     .apex-nav button span svg {
       width: 22px; height: 22px; display: block;
+    }
+    /* Guaranteed 44x44 hit targets for every nav + popover button (WCAG/iOS min) */
+    .apex-nav button {
+      min-height: 44px;
+      min-width: 44px;
+      touch-action: manipulation;
     }
 
     /* Touch active effects */
@@ -2240,13 +2251,33 @@ function KioskView({ members, sessions, onKioskBook, onKioskCheckin, showToast }
     return /* @__PURE__ */ React.createElement("div", { key: s.id, style: { background: C.surf, borderRadius: 12, border: `1px solid ${C.border}`, padding: 14, marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 } }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("div", { style: { color: C.text, fontWeight: 700, fontSize: 14 } }, s.ico, " ", s.name), /* @__PURE__ */ React.createElement("div", { style: { color: C.muted, fontSize: 12, marginTop: 2 } }, s.t, " \xB7 ", s.ins)), att === "present" ? /* @__PURE__ */ React.createElement(Pill, { text: "\u2705 \u0E40\u0E0A\u0E47\u0E04\u0E2D\u0E34\u0E19\u0E41\u0E25\u0E49\u0E27", color: C.green, bg: C.gM }) : bk ? /* @__PURE__ */ React.createElement(Btn, { label: "\u0E40\u0E0A\u0E47\u0E04\u0E2D\u0E34\u0E19", bg: C.green, onClick: () => handleCheckin(s.id), disabled: busy, size: "sm" }) : full ? /* @__PURE__ */ React.createElement(Pill, { text: "\u0E40\u0E15\u0E47\u0E21", color: C.red, bg: C.rM }) : /* @__PURE__ */ React.createElement(Btn, { label: "\u0E08\u0E2D\u0E07+\u0E40\u0E0A\u0E47\u0E04\u0E2D\u0E34\u0E19", bg: C.orange, onClick: () => handleBook(s.id), disabled: busy, size: "sm" }));
   }), /* @__PURE__ */ React.createElement(Btn, { label: "\u2190 \u0E04\u0E19\u0E16\u0E31\u0E14\u0E44\u0E1B (\u0E25\u0E49\u0E32\u0E07\u0E04\u0E48\u0E32)", bg: C.surf, col: C.muted, onClick: reset, full: true }));
 }
-function AdminAttendance({ sessions, members, guestBookings, onMark, onPromoteWL, onAdminCancel, postAction, showToast }) {
+function AdminAttendance({ sessions, members, guestBookings, onMark, onPromoteWL, onAdminCancel, onAdminAddGuest, postAction, showToast }) {
   const [day, setDay] = useState(0);
   const [detailMember, setDetailMember] = useState(null); // [BUG#3] click-to-detail
   const [rescheduleModal, setRescheduleModal] = useState(null); // { sessionId, name }
   const [newDateVal, setNewDateVal] = useState("");
   const [newTimeVal, setNewTimeVal] = useState("");
   const [rescheduling, setRescheduling] = useState(false);
+  // ✅ Admin manual roster add (walk-in / non-member guest)
+  const [manualAddModal, setManualAddModal] = useState(null); // { sessionId, sessionName }
+  const [maName, setMaName] = useState("");
+  const [maPhone, setMaPhone] = useState("");
+  const [maNote, setMaNote] = useState("");
+  const [maSaving, setMaSaving] = useState(false);
+  const openManualAdd = (sessionId, sessionName) => {
+    setMaName(""); setMaPhone(""); setMaNote("");
+    setManualAddModal({ sessionId, sessionName });
+  };
+  const doManualAdd = async () => {
+    if (!maName.trim() || !maPhone.trim()) {
+      showToast("กรุณากรอกชื่อและเบอร์โทร", "warn");
+      return;
+    }
+    setMaSaving(true);
+    const res = await onAdminAddGuest(manualAddModal.sessionId, { name: maName.trim(), phone: maPhone.trim(), note: maNote.trim() });
+    setMaSaving(false);
+    if (res && res.ok) setManualAddModal(null);
+  };
   const doReschedule = async () => {
     if (!newDateVal) return;
     setRescheduling(true);
@@ -2310,7 +2341,38 @@ function AdminAttendance({ sessions, members, guestBookings, onMark, onPromoteWL
       )
     )
   ),
-  /* @__PURE__ */ React.createElement(DayStrip, { sel: day, set: setDay, sessions }), list.length === 0 ? /* @__PURE__ */ React.createElement("div", { style: { textAlign: "center", padding: "40px 0", color: C.muted } }, _t("noClass")) : list.map((s) => /* @__PURE__ */ React.createElement("div", { key: s.id, style: { background: C.surf, borderRadius: 16, border: `1px solid ${C.border}`, marginBottom: 14, overflow: "hidden" } }, /* @__PURE__ */ React.createElement("div", { style: { height: 3, background: s.col } }), /* @__PURE__ */ React.createElement("div", { style: { padding: 16 } }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 } }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("div", { style: { color: C.text, fontWeight: 700, fontSize: 14 } }, s.ico, " ", s.name), /* @__PURE__ */ React.createElement("div", { style: { color: C.muted, fontSize: 12 } }, s.t, " \xB7 ", s.ins, " \xB7 \u0E2B\u0E25\u0E31\u0E01 ", s.bk.length, "/", s.cap)), /* @__PURE__ */ React.createElement(Pill, { text: `${s.bk.length}/${s.cap}`, color: s.col, bg: `${s.col}18` }), /* @__PURE__ */ React.createElement("button", { onClick: () => { setRescheduleModal({ sessionId: s.id, name: s.name }); setNewDateVal(""); setNewTimeVal(""); }, style: { padding: "4px 9px", borderRadius: 7, fontSize: 11, fontWeight: 700, cursor: "pointer", background: C.blue + "22", border: "1px solid " + C.blue + "44", color: C.blue, fontFamily: FONT } }, "\u{1F4C5} \u0E40\u0E25\u0E37\u0E48\u0E2D\u0E19"))), s.bk.length === 0 && s.wl.length === 0 && /* @__PURE__ */ React.createElement("div", { style: { color: C.muted, fontSize: 13, textAlign: "center", padding: "8px 0" } }, "\u0E22\u0E31\u0E07\u0E44\u0E21\u0E48\u0E21\u0E35\u0E01\u0E32\u0E23\u0E08\u0E2D\u0E07"), s.bk.map((mid) => {
+  manualAddModal && /* @__PURE__ */ React.createElement(Overlay, { onClose: () => setManualAddModal(null) },
+    /* @__PURE__ */ React.createElement("div", { style: { color: C.text } },
+      /* @__PURE__ */ React.createElement("div", { style: { fontWeight: 800, fontSize: 17, marginBottom: 4 } }, "➕ เพิ่มคนเข้าคลาส"),
+      /* @__PURE__ */ React.createElement("div", { style: { color: C.muted, fontSize: 13, marginBottom: 16 } }, manualAddModal.sessionName),
+      /* @__PURE__ */ React.createElement("div", { style: { color: C.muted, fontSize: 12, fontWeight: 600, marginBottom: 6 } }, "ชื่อ-นามสกุล *"),
+      /* @__PURE__ */ React.createElement("input", {
+        type: "text", value: maName, autoFocus: true,
+        onChange: (e) => setMaName(e.target.value),
+        placeholder: "ชื่อ-นามสกุล",
+        style: { width: "100%", padding: "11px 12px", background: C.bg, border: "1px solid " + C.border, borderRadius: 9, color: C.text, fontSize: 15, fontFamily: FONT, boxSizing: "border-box", outline: "none", marginBottom: 12, minHeight: 44 }
+      }),
+      /* @__PURE__ */ React.createElement("div", { style: { color: C.muted, fontSize: 12, fontWeight: 600, marginBottom: 6 } }, "เบอร์โทร *"),
+      /* @__PURE__ */ React.createElement("input", {
+        type: "tel", value: maPhone,
+        onChange: (e) => setMaPhone(e.target.value),
+        placeholder: "0812345678",
+        style: { width: "100%", padding: "11px 12px", background: C.bg, border: "1px solid " + C.border, borderRadius: 9, color: C.text, fontSize: 15, fontFamily: FONT, boxSizing: "border-box", outline: "none", marginBottom: 12, minHeight: 44 }
+      }),
+      /* @__PURE__ */ React.createElement("div", { style: { color: C.muted, fontSize: 12, fontWeight: 600, marginBottom: 6 } }, "หมายเหตุ (ไม่บังคับ) เช่น Walk-in, ทดลองเรียน, จองผ่านไลน์"),
+      /* @__PURE__ */ React.createElement("input", {
+        type: "text", value: maNote,
+        onChange: (e) => setMaNote(e.target.value),
+        placeholder: "Walk-in",
+        style: { width: "100%", padding: "11px 12px", background: C.bg, border: "1px solid " + C.border, borderRadius: 9, color: C.text, fontSize: 15, fontFamily: FONT, boxSizing: "border-box", outline: "none", marginBottom: 16, minHeight: 44 }
+      }),
+      /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 10 } },
+        /* @__PURE__ */ React.createElement(Btn, { label: "ยกเลิก", bg: C.surf, col: C.muted, onClick: () => setManualAddModal(null), full: true }),
+        /* @__PURE__ */ React.createElement(Btn, { label: maSaving ? "..." : "✓ เพิ่มเข้าคลาส", bg: C.orange, col: "#fff", onClick: doManualAdd, full: true })
+      )
+    )
+  ),
+  /* @__PURE__ */ React.createElement(DayStrip, { sel: day, set: setDay, sessions }), list.length === 0 ? /* @__PURE__ */ React.createElement("div", { style: { textAlign: "center", padding: "40px 0", color: C.muted } }, _t("noClass")) : list.map((s) => /* @__PURE__ */ React.createElement("div", { key: s.id, style: { background: C.surf, borderRadius: 16, border: `1px solid ${C.border}`, marginBottom: 14, overflow: "hidden" } }, /* @__PURE__ */ React.createElement("div", { style: { height: 3, background: s.col } }), /* @__PURE__ */ React.createElement("div", { style: { padding: 16 } }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 } }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("div", { style: { color: C.text, fontWeight: 700, fontSize: 14 } }, s.ico, " ", s.name), /* @__PURE__ */ React.createElement("div", { style: { color: C.muted, fontSize: 12 } }, s.t, " \xB7 ", s.ins, " \xB7 \u0E2B\u0E25\u0E31\u0E01 ", s.bk.length, "/", s.cap)), /* @__PURE__ */ React.createElement(Pill, { text: `${s.bk.length}/${s.cap}`, color: s.col, bg: `${s.col}18` }), /* @__PURE__ */ React.createElement("button", { onClick: () => { setRescheduleModal({ sessionId: s.id, name: s.name }); setNewDateVal(""); setNewTimeVal(""); }, style: { padding: "4px 9px", borderRadius: 7, fontSize: 11, fontWeight: 700, cursor: "pointer", background: C.blue + "22", border: "1px solid " + C.blue + "44", color: C.blue, fontFamily: FONT } }, "\u{1F4C5} \u0E40\u0E25\u0E37\u0E48\u0E2D\u0E19"), /* @__PURE__ */ React.createElement("button", { onClick: () => openManualAdd(s.id, s.name), style: { padding: "4px 9px", borderRadius: 7, fontSize: 11, fontWeight: 700, cursor: "pointer", background: C.orange + "22", border: "1px solid " + C.orange + "44", color: C.orange, fontFamily: FONT } }, "➕ เพิ่มคน"))), s.bk.length === 0 && s.wl.length === 0 && /* @__PURE__ */ React.createElement("div", { style: { color: C.muted, fontSize: 13, textAlign: "center", padding: "8px 0" } }, "\u0E22\u0E31\u0E07\u0E44\u0E21\u0E48\u0E21\u0E35\u0E01\u0E32\u0E23\u0E08\u0E2D\u0E07"), s.bk.map((mid) => {
     const mid_s = String(mid).trim();
     const cleanMid = mid_s.replace(/^0/, "");
     const m = members.find((x) => {
@@ -2450,6 +2512,17 @@ function AdminMembers({ members, sessions, settings, onSaveMember, onUnlockDevic
   const [phoneEdit, setPhoneEdit] = useState(null);
   const [bookForMember, setBookForMember] = useState(null);
   const [filterTab, setFilterTab] = useState("all");
+  // Debounce search (300ms) so filtering doesn't run on every keystroke — avoids
+  // freezing the UI when there are 3,700+ members.
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  useEffect(() => {
+    const tId = setTimeout(() => setDebouncedSearch(search), 300);
+    return () => clearTimeout(tId);
+  }, [search]);
+  // Chunked rendering: only render PAGE_SIZE cards at a time, "Load More" to reveal the rest.
+  const PAGE_SIZE = 40;
+  const [page, setPage] = useState(1);
+  useEffect(() => { setPage(1); }, [debouncedSearch, filterTab]);
 
   // นับสมาชิกแต่ละประเภท
   const counts = useMemo(() => {
@@ -2477,11 +2550,12 @@ function AdminMembers({ members, sessions, settings, onSaveMember, onUnlockDevic
 
   const filtered = useMemo(() => {
     const now = new Date();
+    const q = debouncedSearch.trim().toLowerCase();
     let list = members.filter((m) =>
-      !search ||
-      String(m.name||"").toLowerCase().includes(search.toLowerCase()) ||
-      String(m.phone||"").includes(search) ||
-      String(m.id||"").includes(search)
+      !q ||
+      String(m.name||"").toLowerCase().includes(q) ||
+      String(m.phone||"").includes(q) ||
+      String(m.id||"").toLowerCase().includes(q)
     );
     if (filterTab === "monthly")     list = list.filter((m) => normMembershipType(m.membershipType) === "monthly");
     if (filterTab === "per_session") list = list.filter((m) => normMembershipType(m.membershipType) === "per_session");
@@ -2503,7 +2577,8 @@ function AdminMembers({ members, sessions, settings, onSaveMember, onUnlockDevic
       list = [...list].sort((a, b) => String(a.suspendedUntil||"").localeCompare(String(b.suspendedUntil||"")));
     }
     return list;
-  }, [members, search, filterTab]);
+  }, [members, debouncedSearch, filterTab]);
+  const visible = useMemo(() => filtered.slice(0, page * PAGE_SIZE), [filtered, page]);
   const openEdit = (m) => {
     setForm(__spreadValues({}, m));
     setModal({ kind: "edit" });
@@ -2553,10 +2628,10 @@ function AdminMembers({ members, sessions, settings, onSaveMember, onUnlockDevic
         );
       })
     ),
-    /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 8, marginBottom: 14 } }, /* @__PURE__ */ React.createElement("input", { value: search, onChange: (e) => setSearch(e.target.value), placeholder: "\u0E04\u0E49\u0E19\u0E2B\u0E32\u0E0A\u0E37\u0E48\u0E2D/\u0E40\u0E1A\u0E2D\u0E23\u0E4C/ID", style: { flex: 1, padding: "10px 12px", background: C.surf, border: `1px solid ${C.border}`, borderRadius: 10, color: C.text, fontSize: 13, outline: "none", fontFamily: FONT } }), /* @__PURE__ */ React.createElement(Btn, { label: "+ \u0E40\u0E1E\u0E34\u0E48\u0E21", bg: C.orange, onClick: openAdd })), /* @__PURE__ */ React.createElement("div", { style: { color: C.muted, fontSize: 11, fontWeight: 700, letterSpacing: 2, marginBottom: 10, display:"flex", justifyContent:"space-between", alignItems:"center" } }, React.createElement("span", null, "\u0E41\u0E2A\u0E14\u0E07 ", filtered.length, "/", members.length, " \u0E04\u0E19"), search && React.createElement("button", {onClick:()=>setSearch(""), style:{background:"none",border:"none",color:C.orange,fontSize:11,cursor:"pointer",fontFamily:FONT}}, "\u2715 \u0E25\u0E49\u0E32\u0E07\u0E04\u0E49\u0E19\u0E2B\u0E32")), filtered.map((m) => {
+    /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 8, marginBottom: 14 } }, /* @__PURE__ */ React.createElement("input", { value: search, onChange: (e) => setSearch(e.target.value), placeholder: "\u0E04\u0E49\u0E19\u0E2B\u0E32\u0E0A\u0E37\u0E48\u0E2D/\u0E40\u0E1A\u0E2D\u0E23\u0E4C/ID", style: { flex: 1, padding: "10px 12px", background: C.surf, border: `1px solid ${C.border}`, borderRadius: 10, color: C.text, fontSize: 13, outline: "none", fontFamily: FONT } }), /* @__PURE__ */ React.createElement(Btn, { label: "+ \u0E40\u0E1E\u0E34\u0E48\u0E21", bg: C.orange, onClick: openAdd })), /* @__PURE__ */ React.createElement("div", { style: { color: C.muted, fontSize: 11, fontWeight: 700, letterSpacing: 2, marginBottom: 10, display:"flex", justifyContent:"space-between", alignItems:"center" } }, React.createElement("span", null, "\u0E41\u0E2A\u0E14\u0E07 ", filtered.length, "/", members.length, " \u0E04\u0E19"), search && React.createElement("button", {onClick:()=>setSearch(""), style:{background:"none",border:"none",color:C.orange,fontSize:11,cursor:"pointer",fontFamily:FONT}}, "\u2715 \u0E25\u0E49\u0E32\u0E07\u0E04\u0E49\u0E19\u0E2B\u0E32")), visible.map((m) => {
     const myBk = Object.values(sessions).filter((s) => s.bk.includes(m.id)).length, st = memberStatus(m);
     return /* @__PURE__ */ React.createElement("div", { key: m.id, style: { background: C.surf, borderRadius: 14, border: `1px solid ${m.suspended ? "rgba(239,68,68,.4)" : m.noShowCount >= 2 ? "rgba(245,158,11,.4)" : C.border}`, padding: 14, marginBottom: 8 } }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 } }, /* @__PURE__ */ React.createElement("div", { style: { flex: 1, minWidth: 0 } }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 8, marginBottom: 4 } }, /* @__PURE__ */ React.createElement("div", { style: { color: C.text, fontWeight: 700, fontSize: 14 } }, m.name), /* @__PURE__ */ React.createElement(StatusBadge, { member: m })), /* @__PURE__ */ React.createElement("div", { style: { color: C.muted, fontSize: 11 } }, m.id, " \xB7 ", m.phone), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 8, marginTop: 5, flexWrap: "wrap" } }, /* @__PURE__ */ React.createElement("span", { style: { fontSize: 11, color: C.sub } }, "\u0E08\u0E2D\u0E07 ", myBk), React.createElement("span", {style:{fontSize:11, color: m.membershipType === "monthly" ? C.blue : C.amber, background: m.membershipType === "monthly" ? C.bM : C.aM, padding:"1px 7px", borderRadius:8, fontWeight:700}}, m.membershipType === "monthly" ? "\u{1F4C5} \u0E23\u0E32\u0E22\u0E40\u0E14\u0E37\u0E2D\u0E19" : m.membershipType === "per_session" ? "\u{1F39F}\uFE0F \u0E23\u0E32\u0E22\u0E04\u0E23\u0E31\u0E49\u0E07" : "\u2753 \u0E44\u0E21\u0E48\u0E23\u0E30\u0E1A\u0E38"), m.noShowCount > 0 && /* @__PURE__ */ React.createElement("span", { style: { fontSize: 11, color: m.noShowCount >= settings.noShowLimit ? C.red : C.amber } }, "no-show ", m.noShowCount, "/", settings.noShowLimit), m.suspended && /* @__PURE__ */ React.createElement("span", { style: { fontSize: 11, color: "#fff", background: "#DC2626", padding: "1px 7px", borderRadius: 8, fontWeight: 700 } }, "\u{1F6AB} ระงับถึง ", thFmt(m.suspendedUntil)), m.membershipType === "monthly" && m.membershipExpiry && /* @__PURE__ */ React.createElement("span", { style: { fontSize: 11, color: st === "expired" ? C.red : C.green } }, st === "expired" ? "\u0E2B\u0E21\u0E14" : "\u0E16\u0E36\u0E07", " ", thFmt(m.membershipExpiry)), m.membershipType === "per_session" && /* @__PURE__ */ React.createElement("span", { style: { fontSize: 11, color: (m.sessionsLeft || 0) > 0 ? C.blue : C.red } }, "\u0E40\u0E04\u0E23\u0E14\u0E34\u0E15 ", m.sessionsLeft || 0), m.deviceId && /* @__PURE__ */ React.createElement("span", { style: { fontSize: 11, color: C.purple } }, "\u{1F512} \u0E1C\u0E39\u0E01\u0E40\u0E04\u0E23\u0E37\u0E48\u0E2D\u0E07"))), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 6, flexShrink: 0, flexDirection: "column", alignItems: "flex-end" } }, /* @__PURE__ */ React.createElement(Btn, { label: "\u0E41\u0E01\u0E49\u0E44\u0E02", bg: C.bM, col: C.blue, onClick: () => openEdit(m), size: "sm" }), /* @__PURE__ */ React.createElement(Btn, { label: "📱", bg: C.bM, col: C.orange, onClick: () => setPhoneEdit({ memberId: m.id, memberName: m.name }), size: "sm", title: "\u0E41\u0E01\u0E49\u0E40\u0E1A\u0E2D\u0E23\u0E4C\u0E42\u0E17\u0E23" }), React.createElement(Btn, { label: "📅", bg: C.bM, col: C.blue, onClick: () => onKioskBook && setBookForMember({ id: m.id, name: m.name }), size: "sm", title: "จองแทนสมาชิก" }), m.deviceId && /* @__PURE__ */ React.createElement(Btn, { label: "\u{1F513} \u0E1B\u0E25\u0E14\u0E40\u0E04\u0E23\u0E37\u0E48\u0E2D\u0E07", bg: C.pM, col: C.purple, onClick: () => onUnlockDevice(m.id), size: "sm" }))));
-  }), modal && /* @__PURE__ */ React.createElement(Overlay, { onClose: () => setModal(null) }, /* @__PURE__ */ React.createElement("div", { style: { color: C.text, fontWeight: 800, fontSize: 17, marginBottom: 20 } }, modal.kind === "add" ? "\u2795 \u0E40\u0E1E\u0E34\u0E48\u0E21\u0E2A\u0E21\u0E32\u0E0A\u0E34\u0E01\u0E43\u0E2B\u0E21\u0E48" : "\u270F\uFE0F \u0E41\u0E01\u0E49\u0E44\u0E02\u0E2A\u0E21\u0E32\u0E0A\u0E34\u0E01"), /* @__PURE__ */ React.createElement(Field, { lb: "\u0E0A\u0E37\u0E48\u0E2D-\u0E19\u0E32\u0E21\u0E2A\u0E01\u0E38\u0E25" }, /* @__PURE__ */ React.createElement(Inp, { fk: "name", pl: "\u0E0A\u0E37\u0E48\u0E2D-\u0E19\u0E32\u0E21\u0E2A\u0E01\u0E38\u0E25" })), /* @__PURE__ */ React.createElement(Field, { lb: "\u0E40\u0E1A\u0E2D\u0E23\u0E4C\u0E42\u0E17\u0E23\u0E28\u0E31\u0E1E\u0E17\u0E4C" }, /* @__PURE__ */ React.createElement(Inp, { fk: "phone", tp: "tel", pl: "0812345678" })), /* @__PURE__ */ React.createElement(Field, { lb: "\u0E23\u0E2B\u0E31\u0E2A PIN (4 \u0E2B\u0E25\u0E31\u0E01)" }, /* @__PURE__ */ React.createElement(Inp, { fk: "pin", pl: "1234" })), /* @__PURE__ */ React.createElement(Field, { lb: "LINE ID (\u0E44\u0E21\u0E48\u0E1A\u0E31\u0E07\u0E04\u0E31\u0E1A)" }, /* @__PURE__ */ React.createElement(Inp, { fk: "lineId", pl: "line_id" })), /* @__PURE__ */ React.createElement(Field, { lb: "\u0E1B\u0E23\u0E30\u0E40\u0E20\u0E17\u0E2A\u0E21\u0E32\u0E0A\u0E34\u0E01" }, /* @__PURE__ */ React.createElement("select", { value: form.membershipType || "monthly", onChange: (e) => setForm((p) => __spreadProps(__spreadValues({}, p), { membershipType: e.target.value })), style: { width: "100%", padding: "11px 12px", background: C.bg, border: `1px solid ${C.border}`, borderRadius: 9, color: C.text, fontSize: 14, fontFamily: FONT } }, /* @__PURE__ */ React.createElement("option", { value: "monthly" }, "\u0E23\u0E32\u0E22\u0E40\u0E14\u0E37\u0E2D\u0E19 (Monthly)"), /* @__PURE__ */ React.createElement("option", { value: "per_session" }, "\u0E23\u0E32\u0E22\u0E04\u0E23\u0E31\u0E49\u0E07 (Per Session)"), /* @__PURE__ */ React.createElement("option", { value: "none" }, "\u0E22\u0E31\u0E07\u0E44\u0E21\u0E48\u0E21\u0E35"))), form.membershipType === "monthly" && /* @__PURE__ */ React.createElement(Field, { lb: "\u0E27\u0E31\u0E19\u0E2B\u0E21\u0E14\u0E2D\u0E32\u0E22\u0E38" }, /* @__PURE__ */ React.createElement(Inp, { fk: "membershipExpiry", tp: "date" })), form.membershipType === "per_session" && /* @__PURE__ */ React.createElement(Field, { lb: "\u0E08\u0E33\u0E19\u0E27\u0E19\u0E40\u0E04\u0E23\u0E14\u0E34\u0E15 (\u0E04\u0E23\u0E31\u0E49\u0E07)" }, /* @__PURE__ */ React.createElement(Inp, { fk: "sessionsLeft", tp: "number", pl: "10" })), modal.kind === "edit" && /* @__PURE__ */ React.createElement(Field, { lb: "No-show Count" }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 8 } }, /* @__PURE__ */ React.createElement(Inp, { fk: "noShowCount", tp: "number", pl: "0" }), /* @__PURE__ */ React.createElement(Btn, { label: "\u0E23\u0E35\u0E40\u0E0B\u0E47\u0E15", bg: C.gM, col: C.green, onClick: () => setForm((p) => __spreadProps(__spreadValues({}, p), { noShowCount: 0, suspended: false, suspendedUntil: null })), size: "sm" }))), modal.kind === "edit" && form.suspended && /* @__PURE__ */ React.createElement("div", { style: { background: C.rM, borderRadius: 10, padding: 12, marginBottom: 14 } }, /* @__PURE__ */ React.createElement("div", { style: { color: C.red, fontSize: 13, fontWeight: 700, marginBottom: 6 } }, "\u{1F6AB} \u0E16\u0E39\u0E01\u0E23\u0E30\u0E07\u0E31\u0E1A \u0E16\u0E36\u0E07 ", thFmt(form.suspendedUntil)), /* @__PURE__ */ React.createElement(Btn, { label: "\u0E1B\u0E25\u0E14\u0E23\u0E30\u0E07\u0E31\u0E1A", bg: C.gM, col: C.green, onClick: () => setForm((p) => __spreadProps(__spreadValues({}, p), { suspended: false, suspendedUntil: null, noShowCount: 0 })), full: true })), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 10, marginTop: 8 } }, /* @__PURE__ */ React.createElement(Btn, { label: "\u0E22\u0E01\u0E40\u0E25\u0E34\u0E01", bg: C.surf, col: C.muted, onClick: () => setModal(null), full: true }), /* @__PURE__ */ React.createElement(Btn, { label: "\u2713 \u0E1A\u0E31\u0E19\u0E17\u0E36\u0E01", bg: C.orange, onClick: () => {
+  }), (filtered.length > visible.length) && /* @__PURE__ */ React.createElement("div", { style: { textAlign: "center", marginTop: 4, marginBottom: 10 } }, /* @__PURE__ */ React.createElement("button", { onClick: () => setPage((p) => p + 1), style: { padding: "10px 20px", background: C.surf, border: `1px solid ${C.border}`, borderRadius: 10, color: C.orange, fontWeight: 700, fontSize: 13, cursor: "pointer", fontFamily: FONT, minHeight: 44, minWidth: 44, touchAction: "manipulation" } }, `โหลดเพิ่ม (${filtered.length - visible.length})`)), modal && /* @__PURE__ */ React.createElement(Overlay, { onClose: () => setModal(null) }, /* @__PURE__ */ React.createElement("div", { style: { color: C.text, fontWeight: 800, fontSize: 17, marginBottom: 20 } }, modal.kind === "add" ? "\u2795 \u0E40\u0E1E\u0E34\u0E48\u0E21\u0E2A\u0E21\u0E32\u0E0A\u0E34\u0E01\u0E43\u0E2B\u0E21\u0E48" : "\u270F\uFE0F \u0E41\u0E01\u0E49\u0E44\u0E02\u0E2A\u0E21\u0E32\u0E0A\u0E34\u0E01"), /* @__PURE__ */ React.createElement(Field, { lb: "\u0E0A\u0E37\u0E48\u0E2D-\u0E19\u0E32\u0E21\u0E2A\u0E01\u0E38\u0E25" }, /* @__PURE__ */ React.createElement(Inp, { fk: "name", pl: "\u0E0A\u0E37\u0E48\u0E2D-\u0E19\u0E32\u0E21\u0E2A\u0E01\u0E38\u0E25" })), /* @__PURE__ */ React.createElement(Field, { lb: "\u0E40\u0E1A\u0E2D\u0E23\u0E4C\u0E42\u0E17\u0E23\u0E28\u0E31\u0E1E\u0E17\u0E4C" }, /* @__PURE__ */ React.createElement(Inp, { fk: "phone", tp: "tel", pl: "0812345678" })), /* @__PURE__ */ React.createElement(Field, { lb: "\u0E23\u0E2B\u0E31\u0E2A PIN (4 \u0E2B\u0E25\u0E31\u0E01)" }, /* @__PURE__ */ React.createElement(Inp, { fk: "pin", pl: "1234" })), /* @__PURE__ */ React.createElement(Field, { lb: "LINE ID (\u0E44\u0E21\u0E48\u0E1A\u0E31\u0E07\u0E04\u0E31\u0E1A)" }, /* @__PURE__ */ React.createElement(Inp, { fk: "lineId", pl: "line_id" })), /* @__PURE__ */ React.createElement(Field, { lb: "\u0E1B\u0E23\u0E30\u0E40\u0E20\u0E17\u0E2A\u0E21\u0E32\u0E0A\u0E34\u0E01" }, /* @__PURE__ */ React.createElement("select", { value: form.membershipType || "monthly", onChange: (e) => setForm((p) => __spreadProps(__spreadValues({}, p), { membershipType: e.target.value })), style: { width: "100%", padding: "11px 12px", background: C.bg, border: `1px solid ${C.border}`, borderRadius: 9, color: C.text, fontSize: 14, fontFamily: FONT } }, /* @__PURE__ */ React.createElement("option", { value: "monthly" }, "\u0E23\u0E32\u0E22\u0E40\u0E14\u0E37\u0E2D\u0E19 (Monthly)"), /* @__PURE__ */ React.createElement("option", { value: "per_session" }, "\u0E23\u0E32\u0E22\u0E04\u0E23\u0E31\u0E49\u0E07 (Per Session)"), /* @__PURE__ */ React.createElement("option", { value: "none" }, "\u0E22\u0E31\u0E07\u0E44\u0E21\u0E48\u0E21\u0E35"))), form.membershipType === "monthly" && /* @__PURE__ */ React.createElement(Field, { lb: "\u0E27\u0E31\u0E19\u0E2B\u0E21\u0E14\u0E2D\u0E32\u0E22\u0E38" }, /* @__PURE__ */ React.createElement(Inp, { fk: "membershipExpiry", tp: "date" })), form.membershipType === "per_session" && /* @__PURE__ */ React.createElement(Field, { lb: "\u0E08\u0E33\u0E19\u0E27\u0E19\u0E40\u0E04\u0E23\u0E14\u0E34\u0E15 (\u0E04\u0E23\u0E31\u0E49\u0E07)" }, /* @__PURE__ */ React.createElement(Inp, { fk: "sessionsLeft", tp: "number", pl: "10" })), modal.kind === "edit" && /* @__PURE__ */ React.createElement(Field, { lb: "No-show Count" }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 8 } }, /* @__PURE__ */ React.createElement(Inp, { fk: "noShowCount", tp: "number", pl: "0" }), /* @__PURE__ */ React.createElement(Btn, { label: "\u0E23\u0E35\u0E40\u0E0B\u0E47\u0E15", bg: C.gM, col: C.green, onClick: () => setForm((p) => __spreadProps(__spreadValues({}, p), { noShowCount: 0, suspended: false, suspendedUntil: null })), size: "sm" }))), modal.kind === "edit" && form.suspended && /* @__PURE__ */ React.createElement("div", { style: { background: C.rM, borderRadius: 10, padding: 12, marginBottom: 14 } }, /* @__PURE__ */ React.createElement("div", { style: { color: C.red, fontSize: 13, fontWeight: 700, marginBottom: 6 } }, "\u{1F6AB} \u0E16\u0E39\u0E01\u0E23\u0E30\u0E07\u0E31\u0E1A \u0E16\u0E36\u0E07 ", thFmt(form.suspendedUntil)), /* @__PURE__ */ React.createElement(Btn, { label: "\u0E1B\u0E25\u0E14\u0E23\u0E30\u0E07\u0E31\u0E1A", bg: C.gM, col: C.green, onClick: () => setForm((p) => __spreadProps(__spreadValues({}, p), { suspended: false, suspendedUntil: null, noShowCount: 0 })), full: true })), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 10, marginTop: 8 } }, /* @__PURE__ */ React.createElement(Btn, { label: "\u0E22\u0E01\u0E40\u0E25\u0E34\u0E01", bg: C.surf, col: C.muted, onClick: () => setModal(null), full: true }), /* @__PURE__ */ React.createElement(Btn, { label: "\u2713 \u0E1A\u0E31\u0E19\u0E17\u0E36\u0E01", bg: C.orange, onClick: () => {
     if (!form.name || !form.phone) {
       showToast("\u0E01\u0E23\u0E2D\u0E01\u0E0A\u0E37\u0E48\u0E2D\u0E41\u0E25\u0E30\u0E40\u0E1A\u0E2D\u0E23\u0E4C", "err");
       return;
@@ -3940,6 +4015,31 @@ function App() {
       showToast(res.error || "\u0E40\u0E01\u0E34\u0E14\u0E02\u0E49\u0E2D\u0E1C\u0E34\u0E14\u0E1E\u0E25\u0E32\u0E14", "err");
     }
   }, [auth, postAction, showToast]);
+  // ✅ Admin manual roster add: walk-in / non-member guest, bypasses member+payment checks
+  const adminAddGuest = useCallback(async (sessionId, data) => {
+    const adminName = (auth == null ? void 0 : auth.adminName) || "staff";
+    const res = await postAction("adminAddGuest", { sessionId, name: data.name, phone: data.phone, note: data.note, adminName }).catch((e) => ({ ok: false, error: e.message }));
+    if (res && res.ok) {
+      const guestId = res.guestId;
+      const s = sessions[sessionId];
+      setSessions((prev) => {
+        const ns = __spreadValues({}, prev);
+        if (ns[sessionId]) ns[sessionId] = __spreadProps(__spreadValues({}, ns[sessionId]), { bk: [...ns[sessionId].bk, guestId] });
+        save("apex_sessions", ns);
+        return ns;
+      });
+      setGuestBookings((prev) => {
+        const displayName = data.note ? `${data.name} (${data.note})` : data.name;
+        const ng = [...prev, { id: guestId, name: displayName, phone: data.phone, sessionId, className: s ? s.name : "", classDate: s ? s.date : "", classTime: s ? s.t : "", amount: 0, slipUrl: "", status: "confirmed", createdAt: new Date().toISOString(), confirmedBy: adminName, confirmedAt: new Date().toISOString() }];
+        save("apex_guest_bookings", ng);
+        return ng;
+      });
+      showToast("✅ เพิ่มเข้าคลาสแล้ว", "ok");
+    } else {
+      showToast((res && res.error) || "เกิดข้อผิดพลาด", "err");
+    }
+    return res;
+  }, [auth, postAction, sessions, save, showToast]);
   const lineLogin = useCallback(async (lineProfile, phone) => {
     const res = await postAction("lineLogin", { lineUserId: lineProfile.userId, displayName: lineProfile.displayName, pictureUrl: lineProfile.pictureUrl, phone });
     return res;
@@ -4249,7 +4349,7 @@ const unreadCount = useMemo(() => cur ? (notifications || []).filter((n) => n.mi
           React.createElement("option", { value: "ko" }, "🇰🇷 한국어"),
           React.createElement("option", { value: "ja" }, "🇯🇵 日本語")
         ),
-        /* @__PURE__ */ React.createElement(ThemeToggle, { dark, toggle: toggleTheme, style: { padding: "4px 8px", fontSize: 11 } }), /* @__PURE__ */ React.createElement("button", { onClick: logout, style: { background: C2.surf, border: `1px solid ${C2.border}`, borderRadius: 9, padding: "5px 10px", color: C2.muted, fontSize: 12, cursor: "pointer", fontFamily: FONT } }, t("logout"))))), /* @__PURE__ */ React.createElement("div", { style: { padding: "14px 14px", paddingBottom: 90, minHeight: "calc(100vh - 56px)" } }, isAdmin ? /* @__PURE__ */ React.createElement(React.Fragment, null, view === "overview" && /* @__PURE__ */ React.createElement(AdminDashboard, { members, sessions, classes, guestBookings }), view === "attend" && /* @__PURE__ */ React.createElement(AdminAttendance, { sessions, members, guestBookings, onMark: markAtt, onPromoteWL: promoteWL, onAdminCancel: adminCancel, postAction, showToast }), view === "kiosk" && /* @__PURE__ */ React.createElement(KioskView, { members, sessions, onKioskBook: kioskBook, onKioskCheckin: kioskCheckin, showToast }), view === "walkin" && /* @__PURE__ */ React.createElement(AdminWalkIn, { guestBookings, onConfirm: confirmGuestPayment, showToast }), view === "members" && /* @__PURE__ */ React.createElement(AdminMembers, { members, sessions, settings, onSaveMember: saveMember, onUnlockDevice: unlockDevice, showToast, onUpdatePhone: updateMemberPhone, onKioskBook: kioskBook }), view === "expiring" && /* @__PURE__ */ React.createElement(AdminExpiringMembers, { members }), view === "adminfeedback" && /* @__PURE__ */ React.createElement(AdminFeedback, { feedback, onResolve: resolveFeedback, showToast }), view === "notiflog" && /* @__PURE__ */ React.createElement(AdminNotifLog, { notifications, members, checkinLog, onSeen: markNotifLogSeen }), view === "reports" && /* @__PURE__ */ React.createElement(AdminReports, { sessions, members, classes, showToast, postAction }), view === "settings" && /* @__PURE__ */ React.createElement(AdminSettings, { settings, onSave: saveSettings, members, onUnlockDevice: unlockDevice, showToast, onUploadImage: uploadImage, postAction, etiquetteRules, onSaveEtiquette: saveEtiquette }), view === "staffmgmt" && /* @__PURE__ */ React.createElement(AdminStaffManagement, { staff, postAction, showToast })) : /* @__PURE__ */ React.createElement(React.Fragment, null, view === "schedule" && /* @__PURE__ */ React.createElement(ScheduleView, { sessions, member: cur, settings, onBook: book, onWaitlist: joinWL, onCancel: cancel, onCancelWL: cancelWL, onToggleWlOptIn: toggleWlOptIn }), view === "myBookings" && /* @__PURE__ */ React.createElement(MyBookingsView, { sessions, member: cur, settings, onCancel: cancel, onCancelWL: cancelWL, onCheckin: checkin, pendingWL, onConfirmWL: confirmWLSpot, onDeclineWL: declineWLSpot }), view === "checkin" && /* @__PURE__ */ React.createElement(CheckinView, { sessions, member: cur, settings, onCheckin: checkin }), view === "notifs" && /* @__PURE__ */ React.createElement(NotificationsView, { notifications, member: cur, onRead: markNotifRead }), view === "feedback" && /* @__PURE__ */ React.createElement(FeedbackView, { member: cur, feedback, onSubmit: submitFeedback, showToast, etiquetteRules }), view === "profile" && /* @__PURE__ */ React.createElement(ProfileView, { member: cur, sessions, settings, onUploadPhoto: uploadMemberPhoto, onToggleWlOptIn: toggleWlOptIn, onPasswordChanged }))), /* @__PURE__ */ React.createElement("div", { className: "apex-nav", style: { position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 440, background: C2.surf, borderTop: `1px solid ${C2.border}`, padding: "8px 0 18px", display: "flex", justifyContent: "space-around", alignItems: "flex-end", zIndex: 50 } },
+        /* @__PURE__ */ React.createElement(ThemeToggle, { dark, toggle: toggleTheme, style: { padding: "4px 8px", fontSize: 11 } }), /* @__PURE__ */ React.createElement("button", { onClick: logout, style: { background: C2.surf, border: `1px solid ${C2.border}`, borderRadius: 9, padding: "5px 10px", color: C2.muted, fontSize: 12, cursor: "pointer", fontFamily: FONT } }, t("logout"))))), /* @__PURE__ */ React.createElement("div", { style: { padding: "14px 14px", paddingBottom: 90, minHeight: "calc(100vh - 56px)" } }, isAdmin ? /* @__PURE__ */ React.createElement(React.Fragment, null, view === "overview" && /* @__PURE__ */ React.createElement(AdminDashboard, { members, sessions, classes, guestBookings }), view === "attend" && /* @__PURE__ */ React.createElement(AdminAttendance, { sessions, members, guestBookings, onMark: markAtt, onPromoteWL: promoteWL, onAdminCancel: adminCancel, onAdminAddGuest: adminAddGuest, postAction, showToast }), view === "kiosk" && /* @__PURE__ */ React.createElement(KioskView, { members, sessions, onKioskBook: kioskBook, onKioskCheckin: kioskCheckin, showToast }), view === "walkin" && /* @__PURE__ */ React.createElement(AdminWalkIn, { guestBookings, onConfirm: confirmGuestPayment, showToast }), view === "members" && /* @__PURE__ */ React.createElement(AdminMembers, { members, sessions, settings, onSaveMember: saveMember, onUnlockDevice: unlockDevice, showToast, onUpdatePhone: updateMemberPhone, onKioskBook: kioskBook }), view === "expiring" && /* @__PURE__ */ React.createElement(AdminExpiringMembers, { members }), view === "adminfeedback" && /* @__PURE__ */ React.createElement(AdminFeedback, { feedback, onResolve: resolveFeedback, showToast }), view === "notiflog" && /* @__PURE__ */ React.createElement(AdminNotifLog, { notifications, members, checkinLog, onSeen: markNotifLogSeen }), view === "reports" && /* @__PURE__ */ React.createElement(AdminReports, { sessions, members, classes, showToast, postAction }), view === "settings" && /* @__PURE__ */ React.createElement(AdminSettings, { settings, onSave: saveSettings, members, onUnlockDevice: unlockDevice, showToast, onUploadImage: uploadImage, postAction, etiquetteRules, onSaveEtiquette: saveEtiquette }), view === "staffmgmt" && /* @__PURE__ */ React.createElement(AdminStaffManagement, { staff, postAction, showToast })) : /* @__PURE__ */ React.createElement(React.Fragment, null, view === "schedule" && /* @__PURE__ */ React.createElement(ScheduleView, { sessions, member: cur, settings, onBook: book, onWaitlist: joinWL, onCancel: cancel, onCancelWL: cancelWL, onToggleWlOptIn: toggleWlOptIn }), view === "myBookings" && /* @__PURE__ */ React.createElement(MyBookingsView, { sessions, member: cur, settings, onCancel: cancel, onCancelWL: cancelWL, onCheckin: checkin, pendingWL, onConfirmWL: confirmWLSpot, onDeclineWL: declineWLSpot }), view === "checkin" && /* @__PURE__ */ React.createElement(CheckinView, { sessions, member: cur, settings, onCheckin: checkin }), view === "notifs" && /* @__PURE__ */ React.createElement(NotificationsView, { notifications, member: cur, onRead: markNotifRead }), view === "feedback" && /* @__PURE__ */ React.createElement(FeedbackView, { member: cur, feedback, onSubmit: submitFeedback, showToast, etiquetteRules }), view === "profile" && /* @__PURE__ */ React.createElement(ProfileView, { member: cur, sessions, settings, onUploadPhoto: uploadMemberPhoto, onToggleWlOptIn: toggleWlOptIn, onPasswordChanged }))), /* @__PURE__ */ React.createElement("div", { className: "apex-nav", style: { position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 440, background: C2.surf, borderTop: `1px solid ${C2.border}`, padding: "8px 0 18px", display: "flex", justifyContent: "space-around", alignItems: "flex-end", zIndex: 50 } },
     isAdmin ? (() => {
       const PRIMARY = NAV.slice(0, 4);
       const MORE = NAV.slice(4);
