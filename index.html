@@ -2251,7 +2251,7 @@ function KioskView({ members, sessions, onKioskBook, onKioskCheckin, showToast }
     return /* @__PURE__ */ React.createElement("div", { key: s.id, style: { background: C.surf, borderRadius: 12, border: `1px solid ${C.border}`, padding: 14, marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 } }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("div", { style: { color: C.text, fontWeight: 700, fontSize: 14 } }, s.ico, " ", s.name), /* @__PURE__ */ React.createElement("div", { style: { color: C.muted, fontSize: 12, marginTop: 2 } }, s.t, " \xB7 ", s.ins)), att === "present" ? /* @__PURE__ */ React.createElement(Pill, { text: "\u2705 \u0E40\u0E0A\u0E47\u0E04\u0E2D\u0E34\u0E19\u0E41\u0E25\u0E49\u0E27", color: C.green, bg: C.gM }) : bk ? /* @__PURE__ */ React.createElement(Btn, { label: "\u0E40\u0E0A\u0E47\u0E04\u0E2D\u0E34\u0E19", bg: C.green, onClick: () => handleCheckin(s.id), disabled: busy, size: "sm" }) : full ? /* @__PURE__ */ React.createElement(Pill, { text: "\u0E40\u0E15\u0E47\u0E21", color: C.red, bg: C.rM }) : /* @__PURE__ */ React.createElement(Btn, { label: "\u0E08\u0E2D\u0E07+\u0E40\u0E0A\u0E47\u0E04\u0E2D\u0E34\u0E19", bg: C.orange, onClick: () => handleBook(s.id), disabled: busy, size: "sm" }));
   }), /* @__PURE__ */ React.createElement(Btn, { label: "\u2190 \u0E04\u0E19\u0E16\u0E31\u0E14\u0E44\u0E1B (\u0E25\u0E49\u0E32\u0E07\u0E04\u0E48\u0E32)", bg: C.surf, col: C.muted, onClick: reset, full: true }));
 }
-function AdminAttendance({ sessions, members, guestBookings, onMark, onPromoteWL, onAdminCancel, onAdminAddGuest, postAction, showToast }) {
+function AdminAttendance({ sessions, members, guestBookings, onMark, onPromoteWL, onAdminCancel, onAdminAddGuest, onRescheduleGuest, postAction, showToast }) {
   const [day, setDay] = useState(0);
   const [detailMember, setDetailMember] = useState(null); // [BUG#3] click-to-detail
   const [rescheduleModal, setRescheduleModal] = useState(null); // { sessionId, name }
@@ -2277,6 +2277,77 @@ function AdminAttendance({ sessions, members, guestBookings, onMark, onPromoteWL
     const res = await onAdminAddGuest(manualAddModal.sessionId, { name: maName.trim(), phone: maPhone.trim(), note: maNote.trim() });
     setMaSaving(false);
     if (res && res.ok) setManualAddModal(null);
+  };
+  // ✅ [Feature] เลื่อนวัน/คลาสลูกค้ารายครั้ง (reschedule a guest booking)
+  const [rescheduleGuestModal, setRescheduleGuestModal] = useState(null); // { guestId, guestName, guestPhone, oldSessionId, oldClassName, oldDate, oldTime }
+  const [rgNewDate, setRgNewDate] = useState("");
+  const [rgNewSessionId, setRgNewSessionId] = useState("");
+  const [rgSubmitting, setRgSubmitting] = useState(false);
+  const [rgError, setRgError] = useState("");
+  const RG_DATE_OPTIONS = useMemo(() => [...Array(14)].map((_, i) => fmt(shift(TODAY, i))), []);
+  const rgClassOptions = useMemo(() => {
+    if (!rgNewDate) return [];
+    return Object.values(sessions)
+      .filter((s) => s.date === rgNewDate)
+      .sort((a, b) => a.t.localeCompare(b.t));
+  }, [sessions, rgNewDate]);
+  const openRescheduleGuest = (guest, session) => {
+    setRgError("");
+    setRgNewDate(session.date);
+    setRgNewSessionId("");
+    setRescheduleGuestModal({
+      guestId: guest.id, guestName: guest.name || "-", guestPhone: guest.phone || "-",
+      oldSessionId: session.id, oldClassName: session.name, oldDate: session.date, oldTime: session.t,
+    });
+  };
+  const doRescheduleGuest = async () => {
+    if (!rgNewSessionId) { setRgError("กรุณาเลือกคลาสใหม่"); return; }
+    if (rgNewSessionId === rescheduleGuestModal.oldSessionId) { setRgError("กรุณาเลือกวัน/คลาสใหม่ที่แตกต่างจากเดิม"); return; }
+    setRgSubmitting(true);
+    setRgError("");
+    const res = await onRescheduleGuest(rescheduleGuestModal.guestId, rescheduleGuestModal.oldSessionId, rgNewSessionId);
+    setRgSubmitting(false);
+    if (res && res.ok) setRescheduleGuestModal(null);
+    else setRgError((res && res.error) || "เกิดข้อผิดพลาด");
+  };
+  // ✅ [Feature] เช็คย้อนหลัง + สรุปยอดประจำวัน (historical attendance + daily summary)
+  const [historicalMode, setHistoricalMode] = useState(false);
+  const [histDate, setHistDate] = useState(() => fmt(shift(TODAY, -1)));
+  const [histData, setHistData] = useState(null); // { date, sessions: [...] }
+  const [histLoading, setHistLoading] = useState(false);
+  const [histWalkins, setHistWalkins] = useState({}); // { [sessionId]: number }
+  const [histSaving, setHistSaving] = useState({}); // { [sessionId]: bool }
+  const loadHistory = async (dateStr) => {
+    setHistLoading(true);
+    const res = await postAction("getAttendanceHistory", { date: dateStr }).catch((e) => ({ ok: false, error: e.message }));
+    setHistLoading(false);
+    if (res && res.ok) {
+      setHistData(res);
+      const wk = {};
+      (res.sessions || []).forEach((s) => { wk[s.sessionId] = s.walkins || 0; });
+      setHistWalkins(wk);
+    } else {
+      showToast((res && res.error) || "โหลดข้อมูลย้อนหลังไม่สำเร็จ", "err");
+      setHistData({ date: dateStr, sessions: [] });
+    }
+  };
+  const openHistorical = () => { setHistoricalMode(true); loadHistory(histDate); };
+  const changeHistDate = (v) => { setHistDate(v); loadHistory(v); };
+  const saveHistSummary = async (s) => {
+    const adminName = "staff";
+    setHistSaving((p) => __spreadProps(__spreadValues({}, p), { [s.sessionId]: true }));
+    const walkins = Number(histWalkins[s.sessionId]) || 0;
+    const res = await postAction("saveDailyClassSummary", {
+      sessionId: s.sessionId, date: histDate, className: s.className, classTime: s.classTime,
+      systemAttended: s.systemAttended, walkins, noShowCount: s.noShowCount, adminName,
+    }).catch((e) => ({ ok: false, error: e.message }));
+    setHistSaving((p) => __spreadProps(__spreadValues({}, p), { [s.sessionId]: false }));
+    if (res && res.ok) {
+      showToast("✅ บันทึกสรุปยอดแล้ว", "ok");
+      setHistData((prev) => prev ? __spreadProps(__spreadValues({}, prev), { sessions: prev.sessions.map((x) => x.sessionId === s.sessionId ? __spreadProps(__spreadValues({}, x), { walkins, actualTotal: res.actualTotal, summarySaved: true }) : x) }) : prev);
+    } else {
+      showToast((res && res.error) || "บันทึกไม่สำเร็จ", "err");
+    }
   };
   const doReschedule = async () => {
     if (!newDateVal) return;
@@ -2372,7 +2443,87 @@ function AdminAttendance({ sessions, members, guestBookings, onMark, onPromoteWL
       )
     )
   ),
-  /* @__PURE__ */ React.createElement(DayStrip, { sel: day, set: setDay, sessions }), list.length === 0 ? /* @__PURE__ */ React.createElement("div", { style: { textAlign: "center", padding: "40px 0", color: C.muted } }, _t("noClass")) : list.map((s) => /* @__PURE__ */ React.createElement("div", { key: s.id, style: { background: C.surf, borderRadius: 16, border: `1px solid ${C.border}`, marginBottom: 14, overflow: "hidden" } }, /* @__PURE__ */ React.createElement("div", { style: { height: 3, background: s.col } }), /* @__PURE__ */ React.createElement("div", { style: { padding: 16 } }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 } }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("div", { style: { color: C.text, fontWeight: 700, fontSize: 14 } }, s.ico, " ", s.name), /* @__PURE__ */ React.createElement("div", { style: { color: C.muted, fontSize: 12 } }, s.t, " \xB7 ", s.ins, " \xB7 \u0E2B\u0E25\u0E31\u0E01 ", s.bk.length, "/", s.cap)), /* @__PURE__ */ React.createElement(Pill, { text: `${s.bk.length}/${s.cap}`, color: s.col, bg: `${s.col}18` }), /* @__PURE__ */ React.createElement("button", { onClick: () => { setRescheduleModal({ sessionId: s.id, name: s.name }); setNewDateVal(""); setNewTimeVal(""); }, style: { padding: "4px 9px", borderRadius: 7, fontSize: 11, fontWeight: 700, cursor: "pointer", background: C.blue + "22", border: "1px solid " + C.blue + "44", color: C.blue, fontFamily: FONT } }, "\u{1F4C5} \u0E40\u0E25\u0E37\u0E48\u0E2D\u0E19"), /* @__PURE__ */ React.createElement("button", { onClick: () => openManualAdd(s.id, s.name), style: { padding: "4px 9px", borderRadius: 7, fontSize: 11, fontWeight: 700, cursor: "pointer", background: C.orange + "22", border: "1px solid " + C.orange + "44", color: C.orange, fontFamily: FONT } }, "➕ เพิ่มคน"))), s.bk.length === 0 && s.wl.length === 0 && /* @__PURE__ */ React.createElement("div", { style: { color: C.muted, fontSize: 13, textAlign: "center", padding: "8px 0" } }, "\u0E22\u0E31\u0E07\u0E44\u0E21\u0E48\u0E21\u0E35\u0E01\u0E32\u0E23\u0E08\u0E2D\u0E07"), s.bk.map((mid) => {
+  rescheduleGuestModal && /* @__PURE__ */ React.createElement(Overlay, { onClose: () => setRescheduleGuestModal(null) },
+    /* @__PURE__ */ React.createElement("div", { style: { color: C.text } },
+      /* @__PURE__ */ React.createElement("div", { style: { fontWeight: 800, fontSize: 17, marginBottom: 4 } }, "\uD83D\uDDD3\uFE0F \u0E40\u0E25\u0E37\u0E48\u0E2D\u0E19\u0E27\u0E31\u0E19/\u0E04\u0E25\u0E32\u0E2A"),
+      /* @__PURE__ */ React.createElement("div", { style: { color: C.muted, fontSize: 13, marginBottom: 4 } }, rescheduleGuestModal.guestName, " \xB7 ", rescheduleGuestModal.guestPhone),
+      /* @__PURE__ */ React.createElement("div", { style: { color: C.sub, fontSize: 12, marginBottom: 16 } }, "\u0E40\u0E14\u0E34\u0E21: ", rescheduleGuestModal.oldClassName, " \xB7 ", thFmt(rescheduleGuestModal.oldDate), " \xB7 ", rescheduleGuestModal.oldTime, " \u0E19."),
+      /* @__PURE__ */ React.createElement("div", { style: { color: C.muted, fontSize: 12, fontWeight: 600, marginBottom: 6 } }, "\u0E27\u0E31\u0E19\u0E43\u0E2B\u0E21\u0E48"),
+      /* @__PURE__ */ React.createElement("select", {
+        value: rgNewDate,
+        onChange: (e) => { setRgNewDate(e.target.value); setRgNewSessionId(""); },
+        style: { width: "100%", padding: "11px 12px", background: C.bg, border: "1px solid " + C.border, borderRadius: 9, color: C.text, fontSize: 14, fontFamily: FONT, boxSizing: "border-box", outline: "none", marginBottom: 12, minHeight: 44 }
+      }, RG_DATE_OPTIONS.map((ds2) => /* @__PURE__ */ React.createElement("option", { key: ds2, value: ds2 }, thFmt(ds2)))),
+      /* @__PURE__ */ React.createElement("div", { style: { color: C.muted, fontSize: 12, fontWeight: 600, marginBottom: 6 } }, "\u0E04\u0E25\u0E32\u0E2A\u0E43\u0E2B\u0E21\u0E48"),
+      rgClassOptions.length === 0
+        ? /* @__PURE__ */ React.createElement("div", { style: { color: C.muted, fontSize: 13, textAlign: "center", padding: "14px 0", marginBottom: 12 } }, "\u0E44\u0E21\u0E48\u0E21\u0E35\u0E04\u0E25\u0E32\u0E2A\u0E43\u0E19\u0E27\u0E31\u0E19\u0E19\u0E35\u0E49")
+        : /* @__PURE__ */ React.createElement("select", {
+            value: rgNewSessionId,
+            onChange: (e) => setRgNewSessionId(e.target.value),
+            style: { width: "100%", padding: "11px 12px", background: C.bg, border: "1px solid " + C.border, borderRadius: 9, color: C.text, fontSize: 14, fontFamily: FONT, boxSizing: "border-box", outline: "none", marginBottom: 12, minHeight: 44 }
+          }, [/* @__PURE__ */ React.createElement("option", { key: "", value: "" }, "-- \u0E40\u0E25\u0E37\u0E2D\u0E01\u0E04\u0E25\u0E32\u0E2A --")].concat(rgClassOptions.map((cs) => {
+            const left = cs.cap - cs.bk.length;
+            const isCurrent = cs.id === rescheduleGuestModal.oldSessionId;
+            return /* @__PURE__ */ React.createElement("option", { key: cs.id, value: cs.id, disabled: !isCurrent && left <= 0 }, cs.ico, " ", cs.name, " \xB7 ", cs.t, " \u0E19. \xB7 \u0E27\u0E48\u0E32\u0E07 ", Math.max(left, 0), "/", cs.cap, isCurrent ? " (\u0E1B\u0E31\u0E08\u0E08\u0E38\u0E1A\u0E31\u0E19)" : "");
+          }))),
+      rgError && /* @__PURE__ */ React.createElement("div", { style: { color: C.red, fontSize: 12, marginBottom: 12 } }, "\u26A0\uFE0F ", rgError),
+      /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 10 } },
+        /* @__PURE__ */ React.createElement(Btn, { label: "\u0E22\u0E01\u0E40\u0E25\u0E34\u0E01", bg: C.surf, col: C.muted, onClick: () => setRescheduleGuestModal(null), full: true }),
+        /* @__PURE__ */ React.createElement(Btn, { label: rgSubmitting ? "\u0E01\u0E33\u0E25\u0E31\u0E07\u0E40\u0E25\u0E37\u0E48\u0E2D\u0E19..." : "\u2713 \u0E22\u0E37\u0E19\u0E22\u0E31\u0E19\u0E01\u0E32\u0E23\u0E40\u0E25\u0E37\u0E48\u0E2D\u0E19\u0E04\u0E25\u0E32\u0E2A", bg: C.orange, col: "#fff", onClick: doRescheduleGuest, full: true, disabled: rgSubmitting })
+      )
+    )
+  ),
+  historicalMode && /* @__PURE__ */ React.createElement(Overlay, { onClose: () => setHistoricalMode(false) },
+    /* @__PURE__ */ React.createElement("div", { style: { color: C.text, minWidth: 300 } },
+      /* @__PURE__ */ React.createElement("div", { style: { fontWeight: 800, fontSize: 17, marginBottom: 4 } }, "📊 เช็คย้อนหลัง + สรุปยอดประจำวัน"),
+      /* @__PURE__ */ React.createElement("input", {
+        type: "date", value: histDate, max: fmt(shift(TODAY, -1)),
+        onChange: (e) => e.target.value && changeHistDate(e.target.value),
+        style: { width: "100%", padding: "10px 12px", background: C.bg, border: "1px solid " + C.border, borderRadius: 9, color: C.text, fontSize: 15, fontFamily: FONT, boxSizing: "border-box", outline: "none", margin: "12px 0 16px", minHeight: 44 }
+      }),
+      histLoading && /* @__PURE__ */ React.createElement("div", { style: { textAlign: "center", color: C.muted, padding: "24px 0" } }, "กำลังโหลด..."),
+      !histLoading && histData && histData.sessions.length === 0 && /* @__PURE__ */ React.createElement("div", { style: { textAlign: "center", color: C.muted, padding: "24px 0" } }, "ไม่มีคลาสในวันนี้"),
+      !histLoading && histData && /* @__PURE__ */ React.createElement("div", { style: { maxHeight: "60vh", overflowY: "auto" } }, histData.sessions.map((s) => {
+        const walkinsVal = histWalkins[s.sessionId] != null ? histWalkins[s.sessionId] : 0;
+        const actualTotal = s.systemAttended + (Number(walkinsVal) || 0);
+        const saving = !!histSaving[s.sessionId];
+        return /* @__PURE__ */ React.createElement("div", { key: s.sessionId, style: { background: C.surf, borderRadius: 12, border: "1px solid " + C.border, padding: 12, marginBottom: 10 } },
+          /* @__PURE__ */ React.createElement("div", { style: { fontWeight: 700, fontSize: 13, color: C.text, marginBottom: 2 } }, s.classIcon, " ", s.className, " \xB7 ", s.classTime, " น."),
+          /* @__PURE__ */ React.createElement("div", { style: { fontSize: 11, color: C.muted, marginBottom: 8 } }, s.attendees.length, " คนจอง \xB7 ", s.summarySaved ? "บันทึกสรุปแล้ว" : "ยังไม่ได้บันทึกสรุป"),
+          s.attendees.length > 0 && /* @__PURE__ */ React.createElement("div", { style: { marginBottom: 10 } }, s.attendees.map((a) => /* @__PURE__ */ React.createElement("div", { key: a.id, style: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "5px 0", fontSize: 12, borderBottom: "1px solid " + C.border } },
+            /* @__PURE__ */ React.createElement("span", { style: { color: C.sub } }, a.status === "present" ? "✅" : a.status === "noshow" ? "❌" : "⚪", " ", a.name, a.type === "guest" ? " (รายครั้ง)" : ""),
+            /* @__PURE__ */ React.createElement("span", { style: { color: C.muted } }, a.status === "present" ? "มา" : a.status === "noshow" ? "ไม่มา" : "ยังไม่เช็ค")
+          ))),
+          /* @__PURE__ */ React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 } },
+            /* @__PURE__ */ React.createElement("div", { style: { background: C.bg, borderRadius: 8, padding: "8px 10px" } },
+              /* @__PURE__ */ React.createElement("div", { style: { fontSize: 10, color: C.muted } }, "สมาชิกจองผ่านระบบ"),
+              /* @__PURE__ */ React.createElement("div", { style: { fontSize: 16, fontWeight: 800, color: C.green } }, s.systemAttended)
+            ),
+            /* @__PURE__ */ React.createElement("div", { style: { background: C.bg, borderRadius: 8, padding: "8px 10px" } },
+              /* @__PURE__ */ React.createElement("div", { style: { fontSize: 10, color: C.muted } }, "ไม่มา"),
+              /* @__PURE__ */ React.createElement("div", { style: { fontSize: 16, fontWeight: 800, color: C.red } }, s.noShowCount)
+            )
+          ),
+          /* @__PURE__ */ React.createElement("div", { style: { color: C.muted, fontSize: 11, fontWeight: 600, marginBottom: 5 } }, "วอล์คอิน (กรอกจำนวน)"),
+          /* @__PURE__ */ React.createElement("input", {
+            type: "number", min: 0, value: walkinsVal,
+            onChange: (e) => setHistWalkins((p) => __spreadProps(__spreadValues({}, p), { [s.sessionId]: e.target.value.replace(/\D/g, "") })),
+            style: { width: "100%", padding: "8px 10px", background: C.bg, border: "1px solid " + C.border, borderRadius: 8, color: C.text, fontSize: 14, fontFamily: FONT, boxSizing: "border-box", outline: "none", marginBottom: 8, minHeight: 40 }
+          }),
+          /* @__PURE__ */ React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 } },
+            /* @__PURE__ */ React.createElement("span", { style: { fontSize: 12, color: C.muted } }, "รวมผู้เข้าเรียนจริง"),
+            /* @__PURE__ */ React.createElement("span", { style: { fontSize: 18, fontWeight: 800, color: C.orange } }, actualTotal)
+          ),
+          /* @__PURE__ */ React.createElement(Btn, { label: saving ? "กำลังบันทึก..." : "💾 บันทึกสรุปยอด", bg: C.orange, col: "#fff", onClick: () => saveHistSummary(s), full: true, disabled: saving })
+        );
+      })),
+      /* @__PURE__ */ React.createElement("div", { style: { marginTop: 10 } }, /* @__PURE__ */ React.createElement(Btn, { label: "ปิด", bg: C.surf, col: C.muted, onClick: () => setHistoricalMode(false), full: true }))
+    )
+  ),
+  /* @__PURE__ */ React.createElement("div", { style: { display: "flex", justifyContent: "flex-end", marginBottom: 10 } },
+    /* @__PURE__ */ React.createElement("button", { onClick: openHistorical, style: { padding: "7px 12px", borderRadius: 9, fontSize: 12, fontWeight: 700, cursor: "pointer", background: C.surf, border: "1px solid " + C.border, color: C.sub, fontFamily: FONT, minHeight: 44, touchAction: "manipulation" } }, "📊 ดูย้อนหลัง / สรุปยอดประจำวัน")
+  ),
+    /* @__PURE__ */ React.createElement(DayStrip, { sel: day, set: setDay, sessions }), list.length === 0 ? /* @__PURE__ */ React.createElement("div", { style: { textAlign: "center", padding: "40px 0", color: C.muted } }, _t("noClass")) : list.map((s) => /* @__PURE__ */ React.createElement("div", { key: s.id, style: { background: C.surf, borderRadius: 16, border: `1px solid ${C.border}`, marginBottom: 14, overflow: "hidden" } }, /* @__PURE__ */ React.createElement("div", { style: { height: 3, background: s.col } }), /* @__PURE__ */ React.createElement("div", { style: { padding: 16 } }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 } }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("div", { style: { color: C.text, fontWeight: 700, fontSize: 14 } }, s.ico, " ", s.name), /* @__PURE__ */ React.createElement("div", { style: { color: C.muted, fontSize: 12 } }, s.t, " \xB7 ", s.ins, " \xB7 \u0E2B\u0E25\u0E31\u0E01 ", s.bk.length, "/", s.cap)), /* @__PURE__ */ React.createElement(Pill, { text: `${s.bk.length}/${s.cap}`, color: s.col, bg: `${s.col}18` }), /* @__PURE__ */ React.createElement("button", { onClick: () => { setRescheduleModal({ sessionId: s.id, name: s.name }); setNewDateVal(""); setNewTimeVal(""); }, style: { padding: "4px 9px", borderRadius: 7, fontSize: 11, fontWeight: 700, cursor: "pointer", background: C.blue + "22", border: "1px solid " + C.blue + "44", color: C.blue, fontFamily: FONT } }, "\u{1F4C5} \u0E40\u0E25\u0E37\u0E48\u0E2D\u0E19"), /* @__PURE__ */ React.createElement("button", { onClick: () => openManualAdd(s.id, s.name), style: { padding: "4px 9px", borderRadius: 7, fontSize: 11, fontWeight: 700, cursor: "pointer", background: C.orange + "22", border: "1px solid " + C.orange + "44", color: C.orange, fontFamily: FONT } }, "➕ เพิ่มคน"))), s.bk.length === 0 && s.wl.length === 0 && /* @__PURE__ */ React.createElement("div", { style: { color: C.muted, fontSize: 13, textAlign: "center", padding: "8px 0" } }, "\u0E22\u0E31\u0E07\u0E44\u0E21\u0E48\u0E21\u0E35\u0E01\u0E32\u0E23\u0E08\u0E2D\u0E07"), s.bk.map((mid) => {
     const mid_s = String(mid).trim();
     const cleanMid = mid_s.replace(/^0/, "");
     const m = members.find((x) => {
@@ -2393,7 +2544,8 @@ function AdminAttendance({ sessions, members, guestBookings, onMark, onPromoteWL
         ),
         /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 5 } },
           /* @__PURE__ */ React.createElement("button", { onClick: (e) => { e.stopPropagation(); onMark(s.id, mid, "present"); }, style: { padding: "6px 10px", borderRadius: 7, fontSize: 11, fontWeight: 700, cursor: "pointer", background: gAtt === "present" ? C.green : C.gM, border: `1px solid ${gAtt === "present" ? C.green : "rgba(34,197,94,.3)"}`, color: gAtt === "present" ? "#fff" : C.green, fontFamily: FONT } }, "\u2713 \u0E21\u0E32"),
-          /* @__PURE__ */ React.createElement("button", { onClick: (e) => { e.stopPropagation(); onMark(s.id, mid, "noshow"); }, style: { padding: "6px 10px", borderRadius: 7, fontSize: 11, fontWeight: 700, cursor: "pointer", background: gAtt === "noshow" ? C.red : C.rM, border: `1px solid ${gAtt === "noshow" ? C.red : "rgba(239,68,68,.3)"}`, color: gAtt === "noshow" ? "#fff" : C.red, fontFamily: FONT } }, "\u2717 \u0E44\u0E21\u0E48\u0E21\u0E32")
+          /* @__PURE__ */ React.createElement("button", { onClick: (e) => { e.stopPropagation(); onMark(s.id, mid, "noshow"); }, style: { padding: "6px 10px", borderRadius: 7, fontSize: 11, fontWeight: 700, cursor: "pointer", background: gAtt === "noshow" ? C.red : C.rM, border: `1px solid ${gAtt === "noshow" ? C.red : "rgba(239,68,68,.3)"}`, color: gAtt === "noshow" ? "#fff" : C.red, fontFamily: FONT } }, "\u2717 \u0E44\u0E21\u0E48\u0E21\u0E32"),
+          /* @__PURE__ */ React.createElement("button", { onClick: (e) => { e.stopPropagation(); openRescheduleGuest(g, s); }, style: { padding: "6px 10px", borderRadius: 7, fontSize: 11, fontWeight: 700, cursor: "pointer", background: C.bM, border: "1px solid " + C.blue + "44", color: C.blue, fontFamily: FONT } }, "\u{1F5D3}\uFE0F \u0E40\u0E25\u0E37\u0E48\u0E2D\u0E19")
         )
       );
       return /* @__PURE__ */ React.createElement("div", { key: mid, style: { display:"flex", alignItems:"center", justifyContent:"space-between", padding:"7px 0", borderBottom:"1px solid "+C.border } }, /* @__PURE__ */ React.createElement("div", { style:{display:"flex",alignItems:"center",gap:8} }, /* @__PURE__ */ React.createElement("div", { style:{width:34,height:34,borderRadius:"50%",background:gAtt==="present"?C.gM:gAtt==="noshow"?C.rM:C.surfUp,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14} }, gAtt==="present"?"\u2705":gAtt==="noshow"?"\u274C":"\u{1F464}"), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("div", { style:{color:C.sub,fontSize:13,fontWeight:600} }, "\u{1F464} \u0E2A\u0E21\u0E32\u0E0A\u0E34\u0E01"), /* @__PURE__ */ React.createElement("div", { style:{color:C.muted,fontSize:10} }, "ID: ", String(mid).length > 20 ? "\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E16\u0E39\u0E01\u0E40\u0E02\u0E35\u0E22\u0E19\u0E17\u0E31\u0E1A\u0E43\u0E19 Sheets" : mid))), /* @__PURE__ */ React.createElement("div", { style:{display:"flex",gap:5} }, /* @__PURE__ */ React.createElement("button", { onClick: (e) => { e.stopPropagation(); onMark(s.id, mid, "present"); }, style: { padding: "6px 10px", borderRadius: 7, fontSize: 11, fontWeight: 700, cursor: "pointer", background: gAtt === "present" ? C.green : C.gM, border: `1px solid ${gAtt === "present" ? C.green : "rgba(34,197,94,.3)"}`, color: gAtt === "present" ? "#fff" : C.green, fontFamily: FONT } }, "\u2713 \u0E21\u0E32"), /* @__PURE__ */ React.createElement("button", { onClick: (e) => { e.stopPropagation(); onMark(s.id, mid, "noshow"); }, style: { padding: "6px 10px", borderRadius: 7, fontSize: 11, fontWeight: 700, cursor: "pointer", background: gAtt === "noshow" ? C.red : C.rM, border: `1px solid ${gAtt === "noshow" ? C.red : "rgba(239,68,68,.3)"}`, color: gAtt === "noshow" ? "#fff" : C.red, fontFamily: FONT } }, "\u2717 \u0E44\u0E21\u0E48\u0E21\u0E32"), /* @__PURE__ */ React.createElement("button", { onClick: (e) => { e.stopPropagation(); if (window.confirm("\u0E22\u0E01\u0E40\u0E25\u0E34\u0E01\u0E01\u0E32\u0E23\u0E08\u0E2D\u0E07 ID: " + mid + "?")) onAdminCancel(s.id, mid); }, style: { padding: "6px 10px", borderRadius: 7, fontSize: 11, fontWeight: 700, cursor: "pointer", background: "rgba(239,68,68,.12)", border: "1px solid rgba(239,68,68,.4)", color: C.red, fontFamily: FONT } }, "\u2716 \u0E22\u0E01\u0E40\u0E25\u0E34\u0E01")));
@@ -4040,6 +4192,29 @@ function App() {
     }
     return res;
   }, [auth, postAction, sessions, save, showToast]);
+  // ✅ เลื่อนวัน/คลาสลูกค้ารายครั้ง (reschedule a guest/per-session booking to another session)
+  const rescheduleGuest = useCallback(async (guestId, oldSessionId, newSessionId) => {
+    const res = await postAction("rescheduleGuestBooking", { guestId, oldSessionId, newSessionId }).catch((e) => ({ ok: false, error: e.message }));
+    if (res && res.ok) {
+      const newS = sessions[newSessionId];
+      setSessions((prev) => {
+        const ns = __spreadValues({}, prev);
+        if (ns[oldSessionId]) ns[oldSessionId] = __spreadProps(__spreadValues({}, ns[oldSessionId]), { bk: ns[oldSessionId].bk.filter((x) => String(x) !== String(guestId)) });
+        if (ns[newSessionId]) ns[newSessionId] = __spreadProps(__spreadValues({}, ns[newSessionId]), { bk: [...ns[newSessionId].bk, guestId] });
+        save("apex_sessions", ns);
+        return ns;
+      });
+      setGuestBookings((prev) => {
+        const ng = prev.map((g) => String(g.id) === String(guestId) ? __spreadProps(__spreadValues({}, g), { sessionId: newSessionId, className: newS ? newS.name : g.className, classDate: newS ? newS.date : g.classDate, classTime: newS ? newS.t : g.classTime }) : g);
+        save("apex_guest_bookings", ng);
+        return ng;
+      });
+      showToast("✅ เลื่อนวัน/คลาสสำเร็จ", "ok");
+    } else {
+      showToast((res && res.error) || "เกิดข้อผิดพลาด", "err");
+    }
+    return res;
+  }, [postAction, sessions, save, showToast]);
   const lineLogin = useCallback(async (lineProfile, phone) => {
     const res = await postAction("lineLogin", { lineUserId: lineProfile.userId, displayName: lineProfile.displayName, pictureUrl: lineProfile.pictureUrl, phone });
     return res;
@@ -4349,7 +4524,7 @@ const unreadCount = useMemo(() => cur ? (notifications || []).filter((n) => n.mi
           React.createElement("option", { value: "ko" }, "🇰🇷 한국어"),
           React.createElement("option", { value: "ja" }, "🇯🇵 日本語")
         ),
-        /* @__PURE__ */ React.createElement(ThemeToggle, { dark, toggle: toggleTheme, style: { padding: "4px 8px", fontSize: 11 } }), /* @__PURE__ */ React.createElement("button", { onClick: logout, style: { background: C2.surf, border: `1px solid ${C2.border}`, borderRadius: 9, padding: "5px 10px", color: C2.muted, fontSize: 12, cursor: "pointer", fontFamily: FONT } }, t("logout"))))), /* @__PURE__ */ React.createElement("div", { style: { padding: "14px 14px", paddingBottom: 90, minHeight: "calc(100vh - 56px)" } }, isAdmin ? /* @__PURE__ */ React.createElement(React.Fragment, null, view === "overview" && /* @__PURE__ */ React.createElement(AdminDashboard, { members, sessions, classes, guestBookings }), view === "attend" && /* @__PURE__ */ React.createElement(AdminAttendance, { sessions, members, guestBookings, onMark: markAtt, onPromoteWL: promoteWL, onAdminCancel: adminCancel, onAdminAddGuest: adminAddGuest, postAction, showToast }), view === "kiosk" && /* @__PURE__ */ React.createElement(KioskView, { members, sessions, onKioskBook: kioskBook, onKioskCheckin: kioskCheckin, showToast }), view === "walkin" && /* @__PURE__ */ React.createElement(AdminWalkIn, { guestBookings, onConfirm: confirmGuestPayment, showToast }), view === "members" && /* @__PURE__ */ React.createElement(AdminMembers, { members, sessions, settings, onSaveMember: saveMember, onUnlockDevice: unlockDevice, showToast, onUpdatePhone: updateMemberPhone, onKioskBook: kioskBook }), view === "expiring" && /* @__PURE__ */ React.createElement(AdminExpiringMembers, { members }), view === "adminfeedback" && /* @__PURE__ */ React.createElement(AdminFeedback, { feedback, onResolve: resolveFeedback, showToast }), view === "notiflog" && /* @__PURE__ */ React.createElement(AdminNotifLog, { notifications, members, checkinLog, onSeen: markNotifLogSeen }), view === "reports" && /* @__PURE__ */ React.createElement(AdminReports, { sessions, members, classes, showToast, postAction }), view === "settings" && /* @__PURE__ */ React.createElement(AdminSettings, { settings, onSave: saveSettings, members, onUnlockDevice: unlockDevice, showToast, onUploadImage: uploadImage, postAction, etiquetteRules, onSaveEtiquette: saveEtiquette }), view === "staffmgmt" && /* @__PURE__ */ React.createElement(AdminStaffManagement, { staff, postAction, showToast })) : /* @__PURE__ */ React.createElement(React.Fragment, null, view === "schedule" && /* @__PURE__ */ React.createElement(ScheduleView, { sessions, member: cur, settings, onBook: book, onWaitlist: joinWL, onCancel: cancel, onCancelWL: cancelWL, onToggleWlOptIn: toggleWlOptIn }), view === "myBookings" && /* @__PURE__ */ React.createElement(MyBookingsView, { sessions, member: cur, settings, onCancel: cancel, onCancelWL: cancelWL, onCheckin: checkin, pendingWL, onConfirmWL: confirmWLSpot, onDeclineWL: declineWLSpot }), view === "checkin" && /* @__PURE__ */ React.createElement(CheckinView, { sessions, member: cur, settings, onCheckin: checkin }), view === "notifs" && /* @__PURE__ */ React.createElement(NotificationsView, { notifications, member: cur, onRead: markNotifRead }), view === "feedback" && /* @__PURE__ */ React.createElement(FeedbackView, { member: cur, feedback, onSubmit: submitFeedback, showToast, etiquetteRules }), view === "profile" && /* @__PURE__ */ React.createElement(ProfileView, { member: cur, sessions, settings, onUploadPhoto: uploadMemberPhoto, onToggleWlOptIn: toggleWlOptIn, onPasswordChanged }))), /* @__PURE__ */ React.createElement("div", { className: "apex-nav", style: { position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 440, background: C2.surf, borderTop: `1px solid ${C2.border}`, padding: "8px 0 18px", display: "flex", justifyContent: "space-around", alignItems: "flex-end", zIndex: 50 } },
+        /* @__PURE__ */ React.createElement(ThemeToggle, { dark, toggle: toggleTheme, style: { padding: "4px 8px", fontSize: 11 } }), /* @__PURE__ */ React.createElement("button", { onClick: logout, style: { background: C2.surf, border: `1px solid ${C2.border}`, borderRadius: 9, padding: "5px 10px", color: C2.muted, fontSize: 12, cursor: "pointer", fontFamily: FONT } }, t("logout"))))), /* @__PURE__ */ React.createElement("div", { style: { padding: "14px 14px", paddingBottom: 90, minHeight: "calc(100vh - 56px)" } }, isAdmin ? /* @__PURE__ */ React.createElement(React.Fragment, null, view === "overview" && /* @__PURE__ */ React.createElement(AdminDashboard, { members, sessions, classes, guestBookings }), view === "attend" && /* @__PURE__ */ React.createElement(AdminAttendance, { sessions, members, guestBookings, onMark: markAtt, onPromoteWL: promoteWL, onAdminCancel: adminCancel, onAdminAddGuest: adminAddGuest, onRescheduleGuest: rescheduleGuest, postAction, showToast }), view === "kiosk" && /* @__PURE__ */ React.createElement(KioskView, { members, sessions, onKioskBook: kioskBook, onKioskCheckin: kioskCheckin, showToast }), view === "walkin" && /* @__PURE__ */ React.createElement(AdminWalkIn, { guestBookings, onConfirm: confirmGuestPayment, showToast }), view === "members" && /* @__PURE__ */ React.createElement(AdminMembers, { members, sessions, settings, onSaveMember: saveMember, onUnlockDevice: unlockDevice, showToast, onUpdatePhone: updateMemberPhone, onKioskBook: kioskBook }), view === "expiring" && /* @__PURE__ */ React.createElement(AdminExpiringMembers, { members }), view === "adminfeedback" && /* @__PURE__ */ React.createElement(AdminFeedback, { feedback, onResolve: resolveFeedback, showToast }), view === "notiflog" && /* @__PURE__ */ React.createElement(AdminNotifLog, { notifications, members, checkinLog, onSeen: markNotifLogSeen }), view === "reports" && /* @__PURE__ */ React.createElement(AdminReports, { sessions, members, classes, showToast, postAction }), view === "settings" && /* @__PURE__ */ React.createElement(AdminSettings, { settings, onSave: saveSettings, members, onUnlockDevice: unlockDevice, showToast, onUploadImage: uploadImage, postAction, etiquetteRules, onSaveEtiquette: saveEtiquette }), view === "staffmgmt" && /* @__PURE__ */ React.createElement(AdminStaffManagement, { staff, postAction, showToast })) : /* @__PURE__ */ React.createElement(React.Fragment, null, view === "schedule" && /* @__PURE__ */ React.createElement(ScheduleView, { sessions, member: cur, settings, onBook: book, onWaitlist: joinWL, onCancel: cancel, onCancelWL: cancelWL, onToggleWlOptIn: toggleWlOptIn }), view === "myBookings" && /* @__PURE__ */ React.createElement(MyBookingsView, { sessions, member: cur, settings, onCancel: cancel, onCancelWL: cancelWL, onCheckin: checkin, pendingWL, onConfirmWL: confirmWLSpot, onDeclineWL: declineWLSpot }), view === "checkin" && /* @__PURE__ */ React.createElement(CheckinView, { sessions, member: cur, settings, onCheckin: checkin }), view === "notifs" && /* @__PURE__ */ React.createElement(NotificationsView, { notifications, member: cur, onRead: markNotifRead }), view === "feedback" && /* @__PURE__ */ React.createElement(FeedbackView, { member: cur, feedback, onSubmit: submitFeedback, showToast, etiquetteRules }), view === "profile" && /* @__PURE__ */ React.createElement(ProfileView, { member: cur, sessions, settings, onUploadPhoto: uploadMemberPhoto, onToggleWlOptIn: toggleWlOptIn, onPasswordChanged }))), /* @__PURE__ */ React.createElement("div", { className: "apex-nav", style: { position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 440, background: C2.surf, borderTop: `1px solid ${C2.border}`, padding: "8px 0 18px", display: "flex", justifyContent: "space-around", alignItems: "flex-end", zIndex: 50 } },
     isAdmin ? (() => {
       const PRIMARY = NAV.slice(0, 4);
       const MORE = NAV.slice(4);
