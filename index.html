@@ -3891,6 +3891,14 @@ function App() {
                 });
               }
 
+              // [Fix 2026-08-13 v2] Mount-effect session build (legacy _sd/_sheetsSessions path) never
+// merged confirmed guest_bookings into bk — unlike the other 3 merge sites. Because this
+// mount effect runs on EVERY fresh page load and its Step 2 override replaces se_built[sid].bk
+// wholesale from _sheetsSessions, it was silently wiping out guests the other sites had added.
+              if (_sd.guestBookings) _sd.guestBookings.forEach(function(g) {
+                var sid = String(g.sessionId || "").trim(), gid = String(g.id || "").trim();
+                if (_sessionMap[sid] && gid && g.status === "confirmed" && _sessionMap[sid].bk.indexOf(gid) === -1) _sessionMap[sid].bk.push(gid);
+              });
               if (_sd.attendance && Array.isArray(_sd.attendance)) {
                 _sd.attendance.forEach(function(a) {
                   var sid = String(a.sessionId||"").trim();
