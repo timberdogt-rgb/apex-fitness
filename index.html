@@ -21,6 +21,7 @@
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js" crossorigin></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js" crossorigin></script>
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js" crossorigin defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" crossorigin></script>
   <style>
 /* ── Theme CSS Variables (auto-switch via body.apex-dark / body.apex-light) ── */
 :root, body.apex-dark {
@@ -679,6 +680,191 @@ body.apex-light {
   </script>
   <script>
     const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxqffA8J25EmgBVKgdzp_gF33jzKtIIWNKRoEMd2_8N8WGLzDErGtJoqHZ0IkSsbjVW0w/exec";
+  // ── Supabase (Phase 3 migration, 2026-08-12) ─────────────────────────
+  const SUPABASE_URL = "https://adspnitwkayyazukialo.supabase.co";
+  const SUPABASE_ANON_KEY = "sb_publishable_NHieWQ2k7B_7VTCmvLkiEQ_kYAPVwYM";
+  const sbClient = (typeof supabase !== "undefined") ? supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
+  const SUPABASE_MIGRATED_ACTIONS = new Set([
+    "loginPassword", "changeMemberPassword", "book", "cancel", "joinWaitlist", "cancelWaitlist",
+    "checkin", "markAttendance", "adminAddGuest", "rescheduleGuestBooking", "confirmGuestPayment",
+    "getAttendanceHistory", "saveDailyClassSummary"
+  ]);
+  async function supabaseGetAll() {
+    const legacyPromise = APPS_SCRIPT_URL
+      ? fetch(APPS_SCRIPT_URL + "?action=getAll", { signal: AbortSignal.timeout(10000) }).then(function(r){return r.json();}).catch(function(){return {};})
+      : Promise.resolve({});
+    const results = await Promise.all([
+      sbClient.from("members").select("*"),
+      sbClient.from("classes").select("*"),
+      sbClient.from("sessions").select("*"),
+      sbClient.from("bookings").select("*").neq("status", "cancelled"),
+      sbClient.from("guest_bookings").select("*"),
+      sbClient.from("attendance").select("*"),
+      legacyPromise
+    ]);
+    const membersR = results[0], classesR = results[1], sessionsR = results[2], bookingsR = results[3], guestR = results[4], attR = results[5], legacy = results[6] || {};
+    const members = (membersR.data || []).map(function(m) {
+      return { id: m.id, name: m.name, phone: m.phone, pin: m.pin, lineId: m.line_id || "",
+        membershipType: m.membership_type || "", membershipExpiry: m.membership_expiry || "",
+        sessionsLeft: (m.sessions_left == null ? "" : m.sessions_left), noShowCount: m.no_show_count || 0,
+        suspended: !!m.suspended, suspendedUntil: m.suspended_until || "", joinDate: m.join_date || "",
+        passwordChanged: !!m.password_changed, deviceId: "", photoUrl: "", lineUserId: "",
+        noShowDates: "", penaltyLevel: "", wlOptIn: "", noShowWindowStart: "" };
+    });
+    const classes = (classesR.data || []).map(function(c) {
+      return { id: c.id, name: c.name, instructor: c.instructor || "", time: c.default_time,
+        duration: c.duration_min, capacity: c.capacity, waitlistCap: c.waitlist_cap,
+        days: c.day_of_week, color: c.color || "", icon: c.icon || "", popular: !!c.popular, active: c.active !== false };
+    });
+    const classMap = {};
+    classes.forEach(function(c) { classMap[c.id] = c; });
+    const sessions = (sessionsR.data || []).map(function(s) {
+      const cls = classMap[s.class_id];
+      return { id: s.id, classId: s.class_id || "", date: s.class_date, bookings: "", waitlist: "",
+        timeOverride: (cls && cls.time !== s.start_time) ? s.start_time : "" };
+    });
+    const bookings = (bookingsR.data || []).map(function(b) {
+      return { id: b.id, sessionId: b.session_id, memberId: b.member_id,
+        type: (b.status === "waitlist" ? "waitlist" : "main"), createdAt: b.created_at };
+    });
+    const attendance = (attR.data || []).map(function(a) {
+      return { sessionId: a.session_id, memberId: a.member_id, status: a.status, markedAt: a.marked_at };
+    });
+    const guestFromSupabase = (guestR.data || []).map(function(g) {
+      return { id: g.id, name: g.name, phone: g.phone || "", sessionId: g.session_id,
+        className: g.class_name || "", classDate: g.class_date, classTime: g.class_time || "",
+        amount: g.amount || 0, slipUrl: g.slip_url || "", status: g.status, createdAt: g.created_at,
+        confirmedBy: g.confirmed_by || "", confirmedAt: g.confirmed_at || "", bookingType: g.booking_type };
+    });
+    const legacyGuest = Array.isArray(legacy.guestBookings) ? legacy.guestBookings : [];
+    const guestIds = {};
+    guestFromSupabase.forEach(function(g) { guestIds[g.id] = true; });
+    const guestBookings = guestFromSupabase.concat(legacyGuest.filter(function(g) { return !guestIds[g.id]; }));
+    return Object.assign({}, legacy, { members: members, classes: classes, sessions: sessions, bookings: bookings, attendance: attendance, guestBookings: guestBookings });
+  }
+  async function supabaseAction(action, data) {
+    try {
+      if (action === "loginPassword") {
+        const phone = String(data.phone || "").replace(/\D/g, "");
+        const q = await sbClient.from("members").select("*").eq("phone", phone).limit(1);
+        if (q.error) return { ok: false, error: "เชื่อมต่อระบบไม่สำเร็จ" };
+        const m = q.data && q.data[0];
+        if (!m) return { ok: false, error: "ไม่พบเบอร์โทรนี้ในระบบ" };
+        if (String(m.pin) !== String(data.password)) return { ok: false, error: "รหัสผ่านไม่ถูกต้อง" };
+        const todayStr = new Date().toISOString().slice(0, 10);
+        if (m.suspended && (!m.suspended_until || m.suspended_until >= todayStr)) return { ok: false, error: "บัญชีถูกระงับชั่วคราว" };
+        return { ok: true, member: { id: m.id }, mustChangePassword: !m.password_changed };
+      }
+      if (action === "changeMemberPassword") {
+        const r = await sbClient.from("members").update({ pin: String(data.newPassword), password_changed: true }).eq("id", String(data.id));
+        if (r.error) return { ok: false, error: "บันทึกไม่สำเร็จ" };
+        return { ok: true };
+      }
+      if (action === "book") {
+        const r = await sbClient.rpc("rpc_book_session", { p_session_id: data.sessionId, p_member_id: String(data.memberId) });
+        if (r.error) return { ok: false, error: "จองไม่สำเร็จ ลองใหม่อีกครั้ง" };
+        return r.data;
+      }
+      if (action === "cancel" || action === "cancelWaitlist") {
+        const r = await sbClient.rpc("rpc_cancel_booking", { p_session_id: data.sessionId, p_member_id: String(data.memberId) });
+        if (r.error) return { ok: false, error: "ยกเลิกไม่สำเร็จ ลองรีเฟรชหน้า" };
+        return r.data;
+      }
+      if (action === "joinWaitlist") {
+        const r = await sbClient.rpc("rpc_join_waitlist", { p_session_id: data.sessionId, p_member_id: String(data.memberId) });
+        if (r.error) return { ok: false, error: "ลงชื่อคิวสำรองไม่สำเร็จ" };
+        return r.data;
+      }
+      if (action === "checkin" || action === "markAttendance") {
+        const status = (data.status === "noshow") ? "noshow" : "present";
+        const r = await sbClient.from("attendance").upsert(
+          { session_id: data.sessionId, member_id: String(data.memberId), status: status, marked_at: new Date().toISOString() },
+          { onConflict: "session_id,member_id" }
+        );
+        if (r.error) return { ok: false, error: "บันทึกเช็คชื่อไม่สำเร็จ" };
+        return { ok: true };
+      }
+      if (action === "adminAddGuest") {
+        const r = await sbClient.rpc("rpc_admin_add_guest", {
+          p_session_id: data.sessionId, p_name: data.name, p_phone: data.phone || null,
+          p_note: data.note || null, p_type: data.bookingType || "walk_in"
+        });
+        if (r.error) return { ok: false, error: "เพิ่มไม่สำเร็จ" };
+        return r.data;
+      }
+      if (action === "rescheduleGuestBooking") {
+        const r = await sbClient.rpc("rpc_reschedule_guest_booking", {
+          p_guest_id: String(data.guestId), p_old_session_id: data.oldSessionId, p_new_session_id: data.newSessionId
+        });
+        if (r.error) return { ok: false, error: "เลื่อนไม่สำเร็จ" };
+        return r.data;
+      }
+      if (action === "confirmGuestPayment") {
+        const r = await sbClient.rpc("rpc_confirm_guest_payment", {
+          p_guest_id: String(data.guestId), p_confirmed_by: data.adminName || "", p_approve: data.approve !== false
+        });
+        if (r.error) return { ok: false, error: "ยืนยันไม่สำเร็จ" };
+        return r.data;
+      }
+      if (action === "getAttendanceHistory") {
+        const dateStr = data.date;
+        const results = await Promise.all([
+          sbClient.from("sessions").select("*").eq("class_date", dateStr),
+          sbClient.from("bookings").select("*").in("status", ["booked", "attended"]),
+          sbClient.from("guest_bookings").select("*").eq("status", "confirmed"),
+          sbClient.from("attendance").select("*"),
+          sbClient.from("daily_summaries").select("*").eq("summary_date", dateStr),
+          sbClient.from("members").select("id,name,phone")
+        ]);
+        if (results[0].error) return { ok: false, error: "โหลดข้อมูลย้อนหลังไม่สำเร็จ" };
+        const sess = results[0].data || [], allBk = results[1].data || [], allGb = results[2].data || [],
+          allAtt = results[3].data || [], allSum = results[4].data || [], allMembers = results[5].data || [];
+        const memberMap = {};
+        allMembers.forEach(function(m) { memberMap[m.id] = m; });
+        const sumMap = {};
+        allSum.forEach(function(s) { sumMap[s.session_id] = s; });
+        const sessionsOut = sess.map(function(s) {
+          const bk = allBk.filter(function(b) { return b.session_id === s.id; });
+          const gb = allGb.filter(function(g) { return g.session_id === s.id; });
+          const attByMember = {};
+          allAtt.filter(function(a) { return a.session_id === s.id; }).forEach(function(a) { attByMember[a.member_id] = a.status; });
+          const memberAttendees = bk.map(function(b) {
+            const mm = memberMap[b.member_id] || {};
+            return { id: b.member_id, name: mm.name || "", phone: mm.phone || "", type: "member", status: attByMember[b.member_id] || "booked" };
+          });
+          const guestAttendees = gb.map(function(g) {
+            return { id: g.id, name: g.name, phone: g.phone || "", type: "guest", status: attByMember[g.id] || "booked" };
+          });
+          const attendees = memberAttendees.concat(guestAttendees);
+          const computedAttended = attendees.filter(function(a) { return a.status === "present"; }).length;
+          const computedNoShow = attendees.filter(function(a) { return a.status === "noshow"; }).length;
+          const sum = sumMap[s.id];
+          const walkins = sum ? sum.walk_in_count : 0;
+          const systemAttended = sum ? sum.system_attended : computedAttended;
+          return { sessionId: s.id, date: s.class_date, className: s.class_name, classTime: s.start_time,
+            classIcon: s.icon || "", color: s.color || "", capacity: s.capacity, attendees: attendees,
+            systemAttended: systemAttended, noShowCount: (sum ? sum.no_show_count : computedNoShow),
+            walkins: walkins, actualTotal: systemAttended + walkins, summarySaved: !!sum };
+        });
+        return { ok: true, date: dateStr, sessions: sessionsOut };
+      }
+      if (action === "saveDailyClassSummary") {
+        const r = await sbClient.from("daily_summaries").upsert({
+          session_id: data.sessionId, summary_date: data.date,
+          system_attended: data.systemAttended || 0, walk_in_count: data.walkins || 0,
+          no_show_count: data.noShowCount || 0, updated_by: data.adminName || "",
+          updated_at: new Date().toISOString()
+        }, { onConflict: "session_id,summary_date" });
+        if (r.error) return { ok: false, error: "บันทึกสรุปไม่สำเร็จ" };
+        return { ok: true };
+      }
+      return { ok: false, error: "unsupported action: " + action };
+    } catch (e) {
+      console.error("supabaseAction error", action, e);
+      return { ok: false, error: "เชื่อมต่อ Supabase ไม่สำเร็จ กรุณาลองใหม่" };
+    }
+  }
+
     // ← ใส่ LIFF ID จาก LINE Developers Console ตรงนี้ เพื่อเปิดใช้ "เข้าสู่ระบบด้วย LINE"
     // ถ้าปล่อยว่างไว้ ปุ่ม LINE Login จะไม่แสดง (ระบบยังใช้งานได้ปกติด้วยเบอร์โทร+OTP)
     const LIFF_ID = "2010458588-pD1CwMsn";
@@ -1519,8 +1705,7 @@ function LoginScreen({ onLogin, deviceId, members, onMembersUpdate, onGuestBooki
     });
     if (!m && APPS_SCRIPT_URL) {
       try {
-        const r = await fetch(APPS_SCRIPT_URL + "?action=getAll", { signal: AbortSignal.timeout(8e3) });
-        const d = await r.json();
+        const d = await supabaseGetAll();
         if (d && d.members) {
           const _freshM = d.members;
           m = _freshM.find((x) => {
@@ -3547,8 +3732,7 @@ function App() {
         let _sheetsMembers = null, _sheetsClasses = null, _sheetsSettings = null, _sheetsSessions = null, _sheetsGuestBookings = null, _sheetsFeedback = null;
         if (APPS_SCRIPT_URL) {
           try {
-            const _sr = await fetch(APPS_SCRIPT_URL + "?action=getAll", {signal: AbortSignal.timeout(10000)});
-            const _sd = await _sr.json();
+            const _sd = await supabaseGetAll();
             if (_sd && _sd.members && _sd.members.length > 0) {
               // Normalize member fields เป็น string เพื่อป้องกัน .includes() error
               const _normalizedMembers = _sd.members.map(function(m) {
@@ -3794,6 +3978,7 @@ function App() {
     }
   }, []);
   const postAction = useCallback(async (action, data) => {
+    if (sbClient && SUPABASE_MIGRATED_ACTIONS.has(action)) { return await supabaseAction(action, data); }
     if (!APPS_SCRIPT_URL) return { ok: true, _offline: true };
     const hasImage = action === "submitGuestBooking" || action === "uploadMemberPhoto" || action === "uploadImage" || action === "saveSettings";
     try {
@@ -4309,8 +4494,7 @@ function App() {
     let isMounted = true;
     const _poll = async () => {
       try {
-        const _r = await fetch(APPS_SCRIPT_URL + "?action=getAll", { signal: AbortSignal.timeout(8000) });
-        const _d = await _r.json();
+        const _d = await supabaseGetAll();
         if (_d && isMounted) {
           if (_d.members) { setMembers(_d.members); store.set("apex_members", _d.members); }
           if (_d.sessions && _d.classes) {
@@ -4373,8 +4557,7 @@ function App() {
       if (nowTs - lastRefresh < 30000) return;
       lastRefresh = nowTs;
       try {
-        const _r2 = await fetch(APPS_SCRIPT_URL + "?action=getAll&_t=" + nowTs, { signal: AbortSignal.timeout(10000) });
-        const _d2 = await _r2.json();
+        const _d2 = await supabaseGetAll();
         if (!_d2) return;
         if (_d2.members) { setMembers(_d2.members); store.set("apex_members", _d2.members); }
         if (_d2.classes) { setClasses(_d2.classes); store.set("apex_classes", _d2.classes); }
@@ -4431,12 +4614,37 @@ function App() {
       doRefresh();
     };
     document.addEventListener("visibilitychange", onWake);
+    document.addEventListener("apex:realtime-refresh", onWake);
     window.addEventListener("focus", onWake);
     return () => {
       document.removeEventListener("visibilitychange", onWake);
       window.removeEventListener("focus", onWake);
+      document.removeEventListener("apex:realtime-refresh", onWake);
     };
   }, [APPS_SCRIPT_URL]);
+  // [Supabase Realtime, 2026-08-12] Instant multi-device sync: any change to
+  // sessions/bookings/guest_bookings/attendance fires the same throttled
+  // refresh path as a tab-wake event (onWake), reusing its pending-write guards.
+  useEffect(function() {
+    if (!sbClient) return;
+    let debounceTimer = null;
+    const onDbChange = function() {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(function() {
+        document.dispatchEvent(new Event("apex:realtime-refresh"));
+      }, 1200);
+    };
+    const channel = sbClient.channel("public-db-changes")
+      .on("postgres_changes", { event: "*", schema: "public", table: "sessions" }, onDbChange)
+      .on("postgres_changes", { event: "*", schema: "public", table: "bookings" }, onDbChange)
+      .on("postgres_changes", { event: "*", schema: "public", table: "guest_bookings" }, onDbChange)
+      .on("postgres_changes", { event: "*", schema: "public", table: "attendance" }, onDbChange)
+      .subscribe();
+    return function() {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      sbClient.removeChannel(channel);
+    };
+  }, []);
 
   // [FIX 2026-08-09] 24h session staleness: touch loggedInAt so a long-idle login
   // is treated as re-validated once the tab becomes active again (member profile
