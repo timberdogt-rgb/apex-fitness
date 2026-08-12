@@ -4553,6 +4553,11 @@ function App() {
             // Apply bookings sheet
             if(_d.bookings) _d.bookings.forEach(function(b){var sid=String(b.sessionId||"").trim(),mid=String(b.memberId||"").trim();if(_pollNext[sid]&&mid&&(b.type==="main"||!b.type)&&_pollNext[sid].bk.indexOf(mid)===-1)_pollNext[sid].bk.push(mid);});
             // Apply attendance from server (check-in จาก Kiosk/Admin จะโชว์ใน Attend view)
+            // [Fix 2026-08-13] Guest bookings live in a separate table now (Supabase split) so
+            // they never land in bk via the bookings merge above — without this, confirmed
+            // per-session guests ("รายครั้ง") vanish from the live roster even though they show
+            // correctly in history (which reads guestBookings directly, not via bk).
+            if(_d.guestBookings) _d.guestBookings.forEach(function(g){var sid=String(g.sessionId||"").trim(),gid=String(g.id||"").trim();if(_pollNext[sid]&&gid&&g.status==="confirmed"&&_pollNext[sid].bk.indexOf(gid)===-1)_pollNext[sid].bk.push(gid);});
             if(_d.attendance) _d.attendance.forEach(function(a){var sid=String(a.sessionId||"").trim(),mid=String(a.memberId||"").trim();if(_pollNext[sid]&&mid&&a.status)_pollNext[sid].att[mid]=String(a.status);});
             // [FIX#CACHE] Save processed sessions (bk=[...], att={...}) ไม่ใช่ raw _d.sessions
             store.set("apex_sessions", _pollNext);
@@ -4570,6 +4575,7 @@ function App() {
             const _sm=buildSessions(_d.classes);
             (_d.sessions||[]).forEach(function(s){var cls=_cM[String(s.classId||"")];if(!cls)return;var dv=new Date(s.date);if(isNaN(dv))return;var sd=fmt(dv);var sid=cls.id+"_"+sd;var bk=typeof healIds==="function"?healIds(s.bookings):(s.bookings?String(s.bookings).split(",").map(x=>x.trim()).filter(Boolean):[]);var wl=typeof healIds==="function"?healIds(s.waitlist):(s.waitlist?String(s.waitlist).split(",").map(x=>x.trim()).filter(Boolean):[]);if(_sm[sid]){_sm[sid].bk=bk;_sm[sid].wl=wl;}else{_sm[sid]={id:sid,cid:cls.id,name:cls.name,ins:cls.ins,date:sd,t:s.timeOverride||cls.t,dur:cls.dur,cap:cls.cap,wlCap:cls.wlCap||cls.wl,col:cls.col,dim:_DP[cls.col]||"#1a0a00",ico:cls.ico,bk:bk,wl:wl,att:{}};}});
             (_d.bookings||[]).forEach(function(b){var sid=String(b.sessionId||"").trim(),mid=String(b.memberId||"").trim();if(!sid||!mid||!_sm[sid])return;var t=String(b.type||"main").trim();if((t==="main"||t==="")&&_sm[sid].bk.indexOf(mid)===-1)_sm[sid].bk.push(mid);else if(t==="waitlist"&&_sm[sid].wl.indexOf(mid)===-1)_sm[sid].wl.push(mid);});
+            (_d.guestBookings||[]).forEach(function(g){var sid=String(g.sessionId||"").trim(),gid=String(g.id||"").trim();if(sid&&gid&&_sm[sid]&&g.status==="confirmed"&&_sm[sid].bk.indexOf(gid)===-1)_sm[sid].bk.push(gid);});
             (_d.attendance||[]).forEach(function(a){var sid=String(a.sessionId||"").trim(),mid=String(a.memberId||"").trim();if(_sm[sid]&&mid&&a.status)_sm[sid].att[mid]=String(a.status);});
             setSessions(_sm);store.set("apex_sessions",_sm);
           }
@@ -4620,6 +4626,10 @@ function App() {
           if (_d2.bookings) _d2.bookings.forEach(function(b) {
             var sid = String(b.sessionId || "").trim(), mid = String(b.memberId || "").trim();
             if (built[sid] && mid && (b.type === "main" || !b.type) && built[sid].bk.indexOf(mid) === -1) built[sid].bk.push(mid);
+          });
+          if (_d2.guestBookings) _d2.guestBookings.forEach(function(g) {
+            var sid = String(g.sessionId || "").trim(), gid = String(g.id || "").trim();
+            if (built[sid] && gid && g.status === "confirmed" && built[sid].bk.indexOf(gid) === -1) built[sid].bk.push(gid);
           });
           if (_d2.attendance) _d2.attendance.forEach(function(a) {
             var sid = String(a.sessionId || "").trim(), mid = String(a.memberId || "").trim();
