@@ -683,23 +683,57 @@ body.apex-light {
   // ── Supabase (Phase 3 migration, 2026-08-12) ─────────────────────────
   const SUPABASE_URL = "https://adspnitwkayyazukialo.supabase.co";
   const SUPABASE_ANON_KEY = "sb_publishable_NHieWQ2k7B_7VTCmvLkiEQ_kYAPVwYM";
+  // [Fix 2026-08-13] Universal phone normalizer — MUST match the format
+  // already stored in Supabase (verified: no leading 0, no +66/66 country
+  // code — e.g. "806289596"). Customers type their phone normally
+  // (with leading 0); this strips it so lookups always match. Foreign
+  // numbers (e.g. "13294411995") pass through unchanged (no leading 0 to
+  // strip, no +66 prefix to match). Same logic ported to apex_sync.py.
+  function normalizePhone(input) {
+    if (!input) return "";
+    let str = String(input).trim().replace(/[^\d+]/g, "");
+    if (str.startsWith("+66")) str = str.slice(3);
+    else if (str.startsWith("66") && str.length >= 11) str = str.slice(2);
+    if (str.startsWith("0")) str = str.slice(1);
+    return str;
+  }
   const sbClient = (typeof supabase !== "undefined") ? supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
   const SUPABASE_MIGRATED_ACTIONS = new Set([
     "loginPassword", "changeMemberPassword", "book", "cancel", "joinWaitlist", "cancelWaitlist",
     "checkin", "markAttendance", "adminAddGuest", "rescheduleGuestBooking", "confirmGuestPayment",
     "getAttendanceHistory", "saveDailyClassSummary"
   ]);
+  async function fetchAllRows(table, applyFilter) {
+    let all = [];
+    let from = 0;
+    const pageSize = 1000;
+    while (true) {
+      let q = sbClient.from(table).select("*").range(from, from + pageSize - 1);
+      if (applyFilter) q = applyFilter(q);
+      const res = await q;
+      if (res.error) return { data: all, error: res.error };
+      all = all.concat(res.data || []);
+      if (!res.data || res.data.length < pageSize) break;
+      from += pageSize;
+    }
+    return { data: all, error: null };
+  }
   async function supabaseGetAll() {
     const legacyPromise = APPS_SCRIPT_URL
       ? fetch(APPS_SCRIPT_URL + "?action=getAll", { signal: AbortSignal.timeout(10000) }).then(function(r){return r.json();}).catch(function(){return {};})
       : Promise.resolve({});
+    // [Fix 2026-08-13] PostgREST caps unpaginated selects at 1000 rows —
+    // members already exceeds that (1103), which silently dropped ~103
+    // members from every getAll response and broke roster name lookups
+    // for whoever fell past row 1000. fetchAllRows() pages through with
+    // .range() until exhausted so this can never silently truncate again.
     const results = await Promise.all([
-      sbClient.from("members").select("*"),
-      sbClient.from("classes").select("*"),
-      sbClient.from("sessions").select("*"),
-      sbClient.from("bookings").select("*").neq("status", "cancelled"),
-      sbClient.from("guest_bookings").select("*"),
-      sbClient.from("attendance").select("*"),
+      fetchAllRows("members"),
+      fetchAllRows("classes"),
+      fetchAllRows("sessions"),
+      fetchAllRows("bookings", function(q) { return q.neq("status", "cancelled"); }),
+      fetchAllRows("guest_bookings", function(q) { return q.not("status", "in", "(cancelled,rejected)"); }),
+      fetchAllRows("attendance"),
       legacyPromise
     ]);
     const membersR = results[0], classesR = results[1], sessionsR = results[2], bookingsR = results[3], guestR = results[4], attR = results[5], legacy = results[6] || {};
@@ -730,22 +764,26 @@ body.apex-light {
     const attendance = (attR.data || []).map(function(a) {
       return { sessionId: a.session_id, memberId: a.member_id, status: a.status, markedAt: a.marked_at };
     });
-    const guestFromSupabase = (guestR.data || []).map(function(g) {
+    // [Fix 2026-08-13] Supabase is now the single source of truth for guest
+    // bookings (previously merged with the legacy GAS sheet by id, which
+    // silently double-listed any guest whose row existed — pre-migration —
+    // in both places, since the id-based dedup only ever matched exact
+    // historical imports, not new legacy-side submissions). submitGuestBooking
+    // (customer self-serve w/ payment slip) still writes to GAS only for now
+    // (no Supabase Storage yet) — those will simply not appear here until
+    // that action is migrated too; this is a known, documented gap, not a bug.
+    const guestBookings = (guestR.data || []).map(function(g) {
       return { id: g.id, name: g.name, phone: g.phone || "", sessionId: g.session_id,
         className: g.class_name || "", classDate: g.class_date, classTime: g.class_time || "",
         amount: g.amount || 0, slipUrl: g.slip_url || "", status: g.status, createdAt: g.created_at,
         confirmedBy: g.confirmed_by || "", confirmedAt: g.confirmed_at || "", bookingType: g.booking_type };
     });
-    const legacyGuest = Array.isArray(legacy.guestBookings) ? legacy.guestBookings : [];
-    const guestIds = {};
-    guestFromSupabase.forEach(function(g) { guestIds[g.id] = true; });
-    const guestBookings = guestFromSupabase.concat(legacyGuest.filter(function(g) { return !guestIds[g.id]; }));
     return Object.assign({}, legacy, { members: members, classes: classes, sessions: sessions, bookings: bookings, attendance: attendance, guestBookings: guestBookings });
   }
   async function supabaseAction(action, data) {
     try {
       if (action === "loginPassword") {
-        const phone = String(data.phone || "").replace(/\D/g, "");
+        const phone = normalizePhone(data.phone);
         const q = await sbClient.from("members").select("*").eq("phone", phone).limit(1);
         if (q.error) return { ok: false, error: "เชื่อมต่อระบบไม่สำเร็จ" };
         const m = q.data && q.data[0];
