@@ -846,17 +846,19 @@ body.apex-light {
       }
       if (action === "getAttendanceHistory") {
         const dateStr = data.date;
+        const sessRes = await sbClient.from("sessions").select("*").eq("class_date", dateStr);
+        if (sessRes.error) return { ok: false, error: "โหลดข้อมูลย้อนหลังไม่สำเร็จ" };
+        const sess = sessRes.data || [];
+        const sessIds = sess.map(function(s) { return s.id; });
         const results = await Promise.all([
-          sbClient.from("sessions").select("*").eq("class_date", dateStr),
-          sbClient.from("bookings").select("*").in("status", ["booked", "attended"]),
-          sbClient.from("guest_bookings").select("*").eq("status", "confirmed"),
-          sbClient.from("attendance").select("*"),
+          sessIds.length ? sbClient.from("bookings").select("*").in("session_id", sessIds).in("status", ["booked", "attended"]) : Promise.resolve({ data: [] }),
+          sessIds.length ? sbClient.from("guest_bookings").select("*").in("session_id", sessIds).eq("status", "confirmed") : Promise.resolve({ data: [] }),
+          sessIds.length ? sbClient.from("attendance").select("*").in("session_id", sessIds) : Promise.resolve({ data: [] }),
           sbClient.from("daily_summaries").select("*").eq("summary_date", dateStr),
-          sbClient.from("members").select("id,name,phone")
+          fetchAllRows("members")
         ]);
-        if (results[0].error) return { ok: false, error: "โหลดข้อมูลย้อนหลังไม่สำเร็จ" };
-        const sess = results[0].data || [], allBk = results[1].data || [], allGb = results[2].data || [],
-          allAtt = results[3].data || [], allSum = results[4].data || [], allMembers = results[5].data || [];
+        const allBk = results[0].data || [], allGb = results[1].data || [],
+          allAtt = results[2].data || [], allSum = results[3].data || [], allMembers = results[4].data || [];
         const memberMap = {};
         allMembers.forEach(function(m) { memberMap[m.id] = m; });
         const sumMap = {};
@@ -4654,10 +4656,12 @@ function App() {
     document.addEventListener("visibilitychange", onWake);
     document.addEventListener("apex:realtime-refresh", onWake);
     window.addEventListener("focus", onWake);
+    window.addEventListener("online", onWake);
     return () => {
       document.removeEventListener("visibilitychange", onWake);
       window.removeEventListener("focus", onWake);
       document.removeEventListener("apex:realtime-refresh", onWake);
+      window.removeEventListener("online", onWake);
     };
   }, [APPS_SCRIPT_URL]);
   // [Supabase Realtime, 2026-08-12] Instant multi-device sync: any change to
@@ -4672,15 +4676,29 @@ function App() {
         document.dispatchEvent(new Event("apex:realtime-refresh"));
       }, 1200);
     };
-    const channel = sbClient.channel("public-db-changes")
-      .on("postgres_changes", { event: "*", schema: "public", table: "sessions" }, onDbChange)
-      .on("postgres_changes", { event: "*", schema: "public", table: "bookings" }, onDbChange)
-      .on("postgres_changes", { event: "*", schema: "public", table: "guest_bookings" }, onDbChange)
-      .on("postgres_changes", { event: "*", schema: "public", table: "attendance" }, onDbChange)
-      .subscribe();
+    let channel = null;
+    function subscribeChannel() {
+      channel = sbClient.channel("public-db-changes")
+        .on("postgres_changes", { event: "*", schema: "public", table: "sessions" }, onDbChange)
+        .on("postgres_changes", { event: "*", schema: "public", table: "bookings" }, onDbChange)
+        .on("postgres_changes", { event: "*", schema: "public", table: "guest_bookings" }, onDbChange)
+        .on("postgres_changes", { event: "*", schema: "public", table: "attendance" }, onDbChange)
+        .subscribe();
+    }
+    subscribeChannel();
+    const onReconnect = function() {
+      if (document.visibilityState === "hidden") return;
+      if (channel && channel.state === "joined") return;
+      try { if (channel) sbClient.removeChannel(channel); } catch (e) {}
+      subscribeChannel();
+    };
+    document.addEventListener("visibilitychange", onReconnect);
+    window.addEventListener("online", onReconnect);
     return function() {
       if (debounceTimer) clearTimeout(debounceTimer);
-      sbClient.removeChannel(channel);
+      document.removeEventListener("visibilitychange", onReconnect);
+      window.removeEventListener("online", onReconnect);
+      if (channel) sbClient.removeChannel(channel);
     };
   }, []);
 
