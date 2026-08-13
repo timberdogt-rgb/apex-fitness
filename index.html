@@ -1691,7 +1691,7 @@ const memberStatus = (m) => {
 };
 const GYM_LAT = 18.7860278;
 const GYM_LNG = 99.0140656;
-const CHECKIN_RADIUS_KM = 0.1; // 100 เมตร
+const CHECKIN_RADIUS_KM = 0.01; // 100 เมตร
 const getDistKm = (lat1, lng1, lat2, lng2) => {
   const R = 6371, dL = (lat2 - lat1) * Math.PI / 180, dG = (lng2 - lng1) * Math.PI / 180;
   const a = Math.sin(dL / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dG / 2) ** 2;
@@ -1711,6 +1711,17 @@ const verifyGPS = () => new Promise((res, rej) => {
     { enableHighAccuracy: true, timeout: 12e3, maximumAge: 3e4 }
   );
 });
+const isWithinCheckinWindow = (s) => {
+  if (!s || !s.date || !s.t) return false;
+  const bkkDateStr = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Bangkok" });
+  if (s.date !== bkkDateStr) return false;
+  const [nh, nm] = new Date().toLocaleTimeString("en-GB", { timeZone: "Asia/Bangkok", hour12: false }).split(":").map(Number);
+  const nowMin = nh * 60 + nm;
+  const [sh, sm] = String(s.t).split(":").map(Number);
+  const startMin = sh * 60 + sm;
+  const endMin = startMin + (Number(s.dur) || 60);
+  return nowMin >= startMin - 30 && nowMin <= endMin;
+};
 const store = {
   async get(k) {
     try {
@@ -2448,11 +2459,15 @@ function MyBookingsView({ sessions, member, settings, onCancel, onCancelWL, onCh
     if (res && res.ok !== false) setModal(null);
   }, full: true })))));
 }
-function CheckinView({ sessions, member, settings, onCheckin }) {
+function CheckinView({ sessions, member, settings, onCheckin, showToast }) {
   const ts = fmt(TODAY);
   const [gpsState, setGpsState] = useState({});
   const list = useMemo(() => Object.values(sessions).filter((s) => s.date === ts && s.bk.includes(member.id)).sort((a, b) => a.t.localeCompare(b.t)), [sessions, member]);
   const doCheckin = async (sid) => {
+    if (!isWithinCheckinWindow(sessions[sid])) {
+      if (showToast) showToast("ยังไม่ถึงเวลาเช็กอิน (เปิดให้เช็กอินก่อนคลาสเริ่ม 30 นาที)", "err");
+      return;
+    }
     setGpsState((p) => __spreadProps(__spreadValues({}, p), { [sid]: "checking" }));
     try {
       const result = await verifyGPS();
@@ -2460,12 +2475,14 @@ function CheckinView({ sessions, member, settings, onCheckin }) {
         setGpsState((p) => __spreadProps(__spreadValues({}, p), { [sid]: "ok" }));
         onCheckin(sid);
       } else {
-        const distTxt = result.dist >= 1 ? `${result.dist.toFixed(1)} \u0E01\u0E21.` : `${Math.round(result.dist * 1e3)} \u0E40\u0E21\u0E15\u0E23`;
+        const distTxt = result.dist >= 1 ? `${result.dist.toFixed(1)} กม.` : `${Math.round(result.dist * 1e3)} เมตร`;
         setGpsState((p) => __spreadProps(__spreadValues({}, p), { [sid]: { status: "far", dist: distTxt } }));
+        if (showToast) showToast("กรุณาเช็กอิน ณ ฟิตเนส (คุณต้องอยู่ในระยะ 10 เมตรรอบ Apex Fitness)", "err");
       }
     } catch (e) {
       const code = e.message === "GPS_UNSUPPORTED" ? "unsupported" : e.code === 1 ? "denied" : "error";
       setGpsState((p) => __spreadProps(__spreadValues({}, p), { [sid]: { status: code } }));
+      if (showToast) showToast("กรุณาเช็กอิน ณ ฟิตเนส (คุณต้องอยู่ในระยะ 10 เมตรรอบ Apex Fitness)", "err");
     }
   };
   if (!list.length) return /* @__PURE__ */ React.createElement("div", { style: { textAlign: "center", padding: "80px 20px", color: C.muted } }, /* @__PURE__ */ React.createElement("div", { style: { fontSize: 48, marginBottom: 12 } }, "\u{1F4C5}"), /* @__PURE__ */ React.createElement("div", { style: { fontSize: 16, color: C.sub } }, _t("noClassToday")));
@@ -2769,10 +2786,14 @@ function KioskView({ members, sessions, onKioskBook, onKioskCheckin, showToast }
     setTimeout(() => { if (inputRef.current) inputRef.current.focus(); }, 50);
   };
   const handleCheckin = async (sid) => {
+    if (!isWithinCheckinWindow(sessions[sid])) {
+      showToast("ยังไม่ถึงเวลาเช็กอิน (เปิดให้เช็กอินก่อนคลาสเริ่ม 30 นาที)", "err");
+      return;
+    }
     setBusy(true);
     await onKioskCheckin(sid, found.id);
     setBusy(false);
-    showToast("\u{1F389} \u0E40\u0E0A\u0E47\u0E04\u0E2D\u0E34\u0E19\u0E2A\u0E33\u0E40\u0E23\u0E47\u0E08!", "ok");
+    showToast("🎉 เช็คอินสำเร็จ!", "ok");
     setTimeout(reset, 1800);
   };
   const handleBook = async (sid) => {
@@ -5155,7 +5176,7 @@ const unreadCount = useMemo(() => cur ? (notifications || []).filter((n) => n.mi
           React.createElement("option", { value: "ko" }, "🇰🇷 한국어"),
           React.createElement("option", { value: "ja" }, "🇯🇵 日本語")
         ),
-        /* @__PURE__ */ React.createElement(ThemeToggle, { dark, toggle: toggleTheme, style: { padding: "4px 8px", fontSize: 11 } }), /* @__PURE__ */ React.createElement("button", { onClick: logout, style: { background: C2.surf, border: `1px solid ${C2.border}`, borderRadius: 9, padding: "5px 10px", color: C2.muted, fontSize: 12, cursor: "pointer", fontFamily: FONT } }, t("logout"))))), /* @__PURE__ */ React.createElement("div", { style: { padding: "14px 14px", paddingBottom: 90, minHeight: "calc(100vh - 56px)" } }, isAdmin ? /* @__PURE__ */ React.createElement(React.Fragment, null, view === "overview" && /* @__PURE__ */ React.createElement(AdminDashboard, { members, sessions, classes, guestBookings }), view === "attend" && /* @__PURE__ */ React.createElement(AdminAttendance, { sessions, members, guestBookings, onMark: markAtt, onPromoteWL: promoteWL, onAdminCancel: adminCancel, onAdminAddGuest: adminAddGuest, onRescheduleGuest: rescheduleGuest, postAction, showToast }), view === "kiosk" && /* @__PURE__ */ React.createElement(KioskView, { members, sessions, onKioskBook: kioskBook, onKioskCheckin: kioskCheckin, showToast }), view === "walkin" && /* @__PURE__ */ React.createElement(AdminWalkIn, { guestBookings, onConfirm: confirmGuestPayment, showToast }), view === "members" && /* @__PURE__ */ React.createElement(AdminMembers, { members, sessions, settings, onSaveMember: saveMember, onUnlockDevice: unlockDevice, showToast, onUpdatePhone: updateMemberPhone, onKioskBook: kioskBook }), view === "expiring" && /* @__PURE__ */ React.createElement(AdminExpiringMembers, { members }), view === "adminfeedback" && /* @__PURE__ */ React.createElement(AdminFeedback, { feedback, onResolve: resolveFeedback, showToast }), view === "notiflog" && /* @__PURE__ */ React.createElement(AdminNotifLog, { notifications, members, checkinLog, onSeen: markNotifLogSeen }), view === "reports" && /* @__PURE__ */ React.createElement(AdminReports, { sessions, members, classes, showToast, postAction }), view === "settings" && /* @__PURE__ */ React.createElement(AdminSettings, { settings, onSave: saveSettings, members, onUnlockDevice: unlockDevice, showToast, onUploadImage: uploadImage, postAction, etiquetteRules, onSaveEtiquette: saveEtiquette }), view === "staffmgmt" && /* @__PURE__ */ React.createElement(AdminStaffManagement, { staff, postAction, showToast })) : /* @__PURE__ */ React.createElement(React.Fragment, null, view === "schedule" && /* @__PURE__ */ React.createElement(ScheduleView, { sessions, member: cur, settings, onBook: book, onWaitlist: joinWL, onCancel: cancel, onCancelWL: cancelWL, onToggleWlOptIn: toggleWlOptIn }), view === "myBookings" && /* @__PURE__ */ React.createElement(MyBookingsView, { sessions, member: cur, settings, onCancel: cancel, onCancelWL: cancelWL, onCheckin: checkin, pendingWL, onConfirmWL: confirmWLSpot, onDeclineWL: declineWLSpot }), view === "checkin" && /* @__PURE__ */ React.createElement(CheckinView, { sessions, member: cur, settings, onCheckin: checkin }), view === "notifs" && /* @__PURE__ */ React.createElement(NotificationsView, { notifications, member: cur, onRead: markNotifRead }), view === "feedback" && /* @__PURE__ */ React.createElement(FeedbackView, { member: cur, feedback, onSubmit: submitFeedback, showToast, etiquetteRules }), view === "profile" && /* @__PURE__ */ React.createElement(ProfileView, { member: cur, sessions, settings, onUploadPhoto: uploadMemberPhoto, onToggleWlOptIn: toggleWlOptIn, onPasswordChanged }))), /* @__PURE__ */ React.createElement("div", { className: "apex-nav", style: { position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 440, background: C2.surf, borderTop: `1px solid ${C2.border}`, padding: "8px 0 18px", display: "flex", justifyContent: "space-around", alignItems: "flex-end", zIndex: 50 } },
+        /* @__PURE__ */ React.createElement(ThemeToggle, { dark, toggle: toggleTheme, style: { padding: "4px 8px", fontSize: 11 } }), /* @__PURE__ */ React.createElement("button", { onClick: logout, style: { background: C2.surf, border: `1px solid ${C2.border}`, borderRadius: 9, padding: "5px 10px", color: C2.muted, fontSize: 12, cursor: "pointer", fontFamily: FONT } }, t("logout"))))), /* @__PURE__ */ React.createElement("div", { style: { padding: "14px 14px", paddingBottom: 90, minHeight: "calc(100vh - 56px)" } }, isAdmin ? /* @__PURE__ */ React.createElement(React.Fragment, null, view === "overview" && /* @__PURE__ */ React.createElement(AdminDashboard, { members, sessions, classes, guestBookings }), view === "attend" && /* @__PURE__ */ React.createElement(AdminAttendance, { sessions, members, guestBookings, onMark: markAtt, onPromoteWL: promoteWL, onAdminCancel: adminCancel, onAdminAddGuest: adminAddGuest, onRescheduleGuest: rescheduleGuest, postAction, showToast }), view === "kiosk" && /* @__PURE__ */ React.createElement(KioskView, { members, sessions, onKioskBook: kioskBook, onKioskCheckin: kioskCheckin, showToast }), view === "walkin" && /* @__PURE__ */ React.createElement(AdminWalkIn, { guestBookings, onConfirm: confirmGuestPayment, showToast }), view === "members" && /* @__PURE__ */ React.createElement(AdminMembers, { members, sessions, settings, onSaveMember: saveMember, onUnlockDevice: unlockDevice, showToast, onUpdatePhone: updateMemberPhone, onKioskBook: kioskBook }), view === "expiring" && /* @__PURE__ */ React.createElement(AdminExpiringMembers, { members }), view === "adminfeedback" && /* @__PURE__ */ React.createElement(AdminFeedback, { feedback, onResolve: resolveFeedback, showToast }), view === "notiflog" && /* @__PURE__ */ React.createElement(AdminNotifLog, { notifications, members, checkinLog, onSeen: markNotifLogSeen }), view === "reports" && /* @__PURE__ */ React.createElement(AdminReports, { sessions, members, classes, showToast, postAction }), view === "settings" && /* @__PURE__ */ React.createElement(AdminSettings, { settings, onSave: saveSettings, members, onUnlockDevice: unlockDevice, showToast, onUploadImage: uploadImage, postAction, etiquetteRules, onSaveEtiquette: saveEtiquette }), view === "staffmgmt" && /* @__PURE__ */ React.createElement(AdminStaffManagement, { staff, postAction, showToast })) : /* @__PURE__ */ React.createElement(React.Fragment, null, view === "schedule" && /* @__PURE__ */ React.createElement(ScheduleView, { sessions, member: cur, settings, onBook: book, onWaitlist: joinWL, onCancel: cancel, onCancelWL: cancelWL, onToggleWlOptIn: toggleWlOptIn }), view === "myBookings" && /* @__PURE__ */ React.createElement(MyBookingsView, { sessions, member: cur, settings, onCancel: cancel, onCancelWL: cancelWL, onCheckin: checkin, pendingWL, onConfirmWL: confirmWLSpot, onDeclineWL: declineWLSpot }), view === "checkin" && /* @__PURE__ */ React.createElement(CheckinView, { sessions, member: cur, settings, onCheckin: checkin, showToast }), view === "notifs" && /* @__PURE__ */ React.createElement(NotificationsView, { notifications, member: cur, onRead: markNotifRead }), view === "feedback" && /* @__PURE__ */ React.createElement(FeedbackView, { member: cur, feedback, onSubmit: submitFeedback, showToast, etiquetteRules }), view === "profile" && /* @__PURE__ */ React.createElement(ProfileView, { member: cur, sessions, settings, onUploadPhoto: uploadMemberPhoto, onToggleWlOptIn: toggleWlOptIn, onPasswordChanged }))), /* @__PURE__ */ React.createElement("div", { className: "apex-nav", style: { position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 440, background: C2.surf, borderTop: `1px solid ${C2.border}`, padding: "8px 0 18px", display: "flex", justifyContent: "space-around", alignItems: "flex-end", zIndex: 50 } },
     isAdmin ? (() => {
       const PRIMARY = NAV.slice(0, 4);
       const MORE = NAV.slice(4);
