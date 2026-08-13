@@ -25,14 +25,14 @@
   <style>
 /* ── Theme CSS Variables (auto-switch via body.apex-dark / body.apex-light) ── */
 :root, body.apex-dark {
-  --c-bg:      #0A0A10;
-  --c-surf:    rgba(16,16,26,0.88);
-  --c-surfUp:  rgba(28,28,42,0.92);
-  --c-border:  rgba(255,255,255,0.07);
-  --c-text:    #F2F2FF;
-  --c-sub:     #9898B8;
-  --c-muted:   #55557A;
-  --c-lineM:   rgba(6,199,85,.16);
+  --c-bg:       #0B0E14;
+  --c-surf:     rgba(22,27,34,0.8);
+  --c-surfUp:   rgba(33,40,50,0.88);
+  --c-border:   #30363D;
+  --c-text:     #FFFFFF;
+  --c-sub:      #B0B8C4;
+  --c-muted:    #8B949E;
+  --c-lineM:    rgba(48,209,88,.16);
 }
 body.apex-light {
   --c-bg:      #F8FAFC;
@@ -63,14 +63,14 @@ body.apex-light {
 
     /* ── CSS Custom Properties (Design Tokens) ─────────────────────── */
     :root {
-      --apex-orange:      #F97316;
-      --apex-orange-d:    #EA580C;
-      --apex-orange-glow: rgba(249,115,22,.22);
-      --apex-green:       #22C55E;
-      --apex-red:         #EF4444;
-      --apex-blue:        #3B82F6;
+      --apex-orange:      #FF3B30;
+      --apex-orange-d:    #D70015;
+      --apex-orange-glow: rgba(255,59,48,.25);
+      --apex-green:       #30D158;
+      --apex-red:         #FF453A;
+      --apex-blue:        #007AFF;
       --apex-purple:      #A855F7;
-      --apex-amber:       #F59E0B;
+      --apex-amber:       #FF9F0A;
       --apex-font:        'Prompt','Sarabun',system-ui,sans-serif;
       --apex-r:           14px;    /* card radius */
       --apex-r-sm:        9px;     /* button/pill radius */
@@ -81,7 +81,7 @@ body.apex-light {
       --apex-shadow-sm:   0 1px 3px rgba(0,0,0,.10),0 1px 2px rgba(0,0,0,.07);
       --apex-shadow:      0 4px 14px rgba(0,0,0,.14),0 1px 4px rgba(0,0,0,.08);
       --apex-shadow-lg:   0 10px 32px rgba(0,0,0,.20),0 4px 10px rgba(0,0,0,.10);
-      --apex-shadow-orange: 0 4px 18px rgba(249,115,22,.30);
+      --apex-shadow-orange: 0 4px 18px rgba(255,59,48,.30);
     }
 
     /* ── Premium Light Mode (default) ───────────────────────────────── */
@@ -155,7 +155,10 @@ body.apex-light {
       transition:    transform var(--apex-t) var(--apex-ease),
                      box-shadow var(--apex-t) var(--apex-ease),
                      opacity var(--apex-t) var(--apex-ease) !important;
+      border-radius: 999px !important;
     }
+    .apex-btn:active { transform: scale(.96); }
+    .apex-btn:disabled { opacity: .55; }
     /* Ripple overlay on hover */
     .apex-btn::after {
       content: '';
@@ -476,10 +479,11 @@ body.apex-light {
 
     /* ── Glassmorphism: session cards ─────────────────────────── */
     body.apex-dark .apex-session-card {
-      backdrop-filter:         blur(14px) saturate(160%) !important;
-      -webkit-backdrop-filter: blur(14px) saturate(160%) !important;
-      background:   rgba(16,16,28,0.82) !important;
-      border:       1px solid rgba(255,255,255,0.07) !important;
+      backdrop-filter:          blur(14px) saturate(160%) !important;
+      -webkit-backdrop-filter:  blur(14px) saturate(160%) !important;
+      background:    rgba(22,27,34,0.8) !important;
+      border:        1px solid #30363D !important;
+      border-radius: 16px !important;
       box-shadow:
         0 4px 24px rgba(0,0,0,.55),
         0 1px 0   rgba(255,255,255,.05) inset !important;
@@ -495,8 +499,8 @@ body.apex-light {
 
     /* ── Header: premium dark glass ───────────────────────────── */
     body.apex-dark .apex-header {
-      background:   rgba(10,10,16,0.94) !important;
-      border-bottom: 1px solid rgba(255,255,255,.05) !important;
+      background: rgba(11,14,20,0.85) !important;
+      border-bottom: 1px solid #30363D !important;
       box-shadow:
         0 1px 0 rgba(255,255,255,.04),
         0 4px 24px rgba(0,0,0,.5) !important;
@@ -504,8 +508,8 @@ body.apex-light {
 
     /* ── Bottom nav: deep dark glass ─────────────────────────── */
     body.apex-dark .apex-nav {
-      background:   rgba(10,10,16,0.96) !important;
-      border-top:   1px solid rgba(255,255,255,.06) !important;
+      background: rgba(11,14,20,0.9) !important;
+      border-top: 1px solid #30363D !important;
       box-shadow:
         0 -1px 0 rgba(255,255,255,.04),
         0 -8px 28px rgba(0,0,0,.55) !important;
@@ -610,7 +614,109 @@ body.apex-light {
       box-shadow: 0 1px 4px rgba(0,0,0,.06) !important;
     }
 
-  </style>
+  
+/* ===== Phase 1: Modern Luxury Dark Glassmorphism utility classes ===== */
+.glass-card {
+  background: var(--c-surf);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--c-border);
+  border-radius: 16px;
+  box-shadow: 0 8px 32px rgba(0,0,0,.35);
+}
+.glass-card-up {
+  background: var(--c-surfUp);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--c-border);
+  border-radius: 16px;
+  box-shadow: 0 8px 32px rgba(0,0,0,.35);
+}
+.glass-panel-top {
+  background: rgba(11,14,20,.72);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--c-border);
+}
+.glass-panel-bottom {
+  background: rgba(11,14,20,.82);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+  border-top: 1px solid var(--c-border);
+}
+
+.btn-capsule {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 20px;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 14px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: transform .15s ease, box-shadow .15s ease, opacity .15s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.btn-capsule:active { transform: scale(.96); }
+.btn-capsule-primary {
+  background: #FF3B30;
+  color: #fff;
+  box-shadow: 0 0 0 rgba(255,59,48,0), 0 4px 14px rgba(255,59,48,.35);
+}
+.btn-capsule-primary:hover { box-shadow: 0 0 16px rgba(255,59,48,.55), 0 4px 14px rgba(255,59,48,.35); }
+.btn-capsule-success {
+  background: #30D158;
+  color: #06210f;
+  box-shadow: 0 4px 14px rgba(48,209,88,.30);
+}
+.btn-capsule-success:hover { box-shadow: 0 0 16px rgba(48,209,88,.5), 0 4px 14px rgba(48,209,88,.3); }
+.btn-capsule-info {
+  background: #007AFF;
+  color: #fff;
+  box-shadow: 0 4px 14px rgba(0,122,255,.30);
+}
+.btn-capsule-info:hover { box-shadow: 0 0 16px rgba(0,122,255,.5), 0 4px 14px rgba(0,122,255,.3); }
+.btn-capsule-outline {
+  background: transparent;
+  color: var(--c-text);
+  border: 1px solid var(--c-border);
+}
+.btn-capsule-outline:hover { border-color: #FF3B30; color: #FF3B30; }
+.btn-capsule-disabled,
+.btn-capsule:disabled {
+  background: var(--c-surfUp);
+  color: var(--c-muted);
+  box-shadow: none;
+  cursor: not-allowed;
+  opacity: .6;
+}
+
+.badge-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.6;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+.badge-pill-success { background: rgba(48,209,88,.14); color: #30D158; border-color: rgba(48,209,88,.35); }
+.badge-pill-warning { background: rgba(255,159,10,.14); color: #FF9F0A; border-color: rgba(255,159,10,.35); }
+.badge-pill-info    { background: rgba(0,122,255,.14); color: #007AFF; border-color: rgba(0,122,255,.35); }
+.badge-pill-danger  { background: rgba(255,59,48,.14); color: #FF453A; border-color: rgba(255,59,48,.35); }
+.badge-pill-neutral { background: rgba(139,148,166,.14); color: #8B949E; border-color: rgba(139,148,166,.35); }
+
+@keyframes apexGlowPulse {
+  0%, 100% { box-shadow: 0 0 0 rgba(255,59,48,.0); }
+  50% { box-shadow: 0 0 14px rgba(255,59,48,.55); }
+}
+.glow-pulse { animation: apexGlowPulse 2.2s ease-in-out infinite; }
+</style>
 </head>
 <body>
   <script>try{if(localStorage.getItem("apex_theme")==="dark")document.body.classList.add("apex-dark");}catch(e){}</script>
@@ -1506,22 +1612,22 @@ const C = {
   muted:   "var(--c-muted)",
   lineM:   "var(--c-lineM)",
   // Accent colours (same brightness on both themes)
-  orange:  "#F97316",
-  orangeD: "#EA580C",
-  green:   "#22C55E",
-  greenD:  "#16A34A",
-  red:     "#EF4444",
-  amber:   "#F59E0B",
-  blue:    "#3B82F6",
+  orange:  "#FF3B30",
+  orangeD: "#D70015",
+  green:   "#30D158",
+  greenD:  "#248A3D",
+  red:     "#FF453A",
+  amber:   "#FF9F0A",
+  blue:    "#007AFF",
   purple:  "#A855F7",
   teal:    "#14B8A6",
   line:    "#06C755",
   // Tint overlays (work on both dark + light backgrounds)
-  oM:  "rgba(249,115,22,.13)",
-  gM:  "rgba(34,197,94,.13)",
-  rM:  "rgba(239,68,68,.13)",
-  aM:  "rgba(245,158,11,.13)",
-  bM:  "rgba(59,130,246,.13)",
+  oM:  "rgba(255,59,48,.13)",
+  gM:  "rgba(48,209,88,.13)",
+  rM:  "rgba(255,69,58,.13)",
+  aM:  "rgba(255,159,10,.13)",
+  bM:  "rgba(0,122,255,.13)",
   pM:  "rgba(168,85,247,.13)",
 };
 const FONT = "'Prompt','Sarabun',system-ui,sans-serif";
@@ -1838,7 +1944,7 @@ const Toast = ({ t }) => {
   const bg = t.ty === "ok" ? C.green : t.ty === "err" ? C.red : t.ty === "warn" ? C.amber : t.ty === "line" ? C.line : C.blue;
   return /* @__PURE__ */ React.createElement("div", { className: "apex-toast", style: { position: "fixed", top: 16, left: "50%", transform: "translateX(-50%)", zIndex: 9999, background: bg, color: "#fff", fontWeight: 700, fontSize: 13, padding: "11px 22px", borderRadius: 40, maxWidth: "92vw", boxShadow: "0 8px 32px rgba(0,0,0,.6)", pointerEvents: "none", textAlign: "center" } }, t.msg);
 };
-const Overlay = ({ children, onClose }) => /* @__PURE__ */ React.createElement("div", { style: { position: "fixed", inset: 0, zIndex: 300, background: "rgba(0,0,0,.85)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }, onClick: onClose }, /* @__PURE__ */ React.createElement("div", { onClick: (e) => e.stopPropagation(), style: { background: C.surf, borderRadius: 20, padding: 28, maxWidth: 360, width: "100%", border: `1px solid ${C.border}`, maxHeight: "90vh", overflowY: "auto" } }, children));
+const Overlay = ({ children, onClose }) => /* @__PURE__ */ React.createElement("div", { style: { position: "fixed", inset: 0, zIndex: 300, background: "rgba(0,0,0,.85)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }, onClick: onClose }, /* @__PURE__ */ React.createElement("div", { className: "glass-card", onClick: (e) => e.stopPropagation(), style: { background: C.surf, borderRadius: 20, padding: 28, maxWidth: 360, width: "100%", border: `1px solid ${C.border}`, maxHeight: "90vh", overflowY: "auto" } }, children));
 const Pill = ({ text, color, bg, sz = 12 }) => /* @__PURE__ */ React.createElement("span", { className: "apex-pill", style: { padding: "3px 9px", borderRadius: 20, background: bg || "transparent", border: `1px solid ${color}`, color, fontSize: sz, fontWeight: 700, whiteSpace: "nowrap" } }, text);
 const HR = () => /* @__PURE__ */ React.createElement("div", { style: { height: 1, background: C.border, margin: "12px 0" } });
 const Btn = ({ label, bg, col = "#fff", onClick, full, disabled, size = "md" }) => {
