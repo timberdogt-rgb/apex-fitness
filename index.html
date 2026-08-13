@@ -778,7 +778,7 @@ body.apex-light {
     function renderInstructorRow(ins) {
       var isEditing = editingInstructor && editingInstructor.id === ins.id;
       if (isEditing) {
-        return React.createElement("div", { key: ins.id, style: { padding: "10px 0", borderBottom: "1px solid #ffffff14" } },
+        return React.createElement("div", { key: ins.id || "new-instructor", style: { padding: "10px 0", borderBottom: "1px solid #ffffff14" } },
           React.createElement("input", { style: inputStyle, value: editingInstructor.name, onChange: function(e) { setEditingInstructor(Object.assign({}, editingInstructor, { name: e.target.value })); }, placeholder: "ชื่อครูผู้สอน" }),
           React.createElement("label", { style: { fontSize: 12, color: "#D1D5DB", display: "flex", alignItems: "center", gap: 6, marginBottom: 8 } },
             React.createElement("input", { type: "checkbox", checked: editingInstructor.is_active !== false, onChange: function(e) { setEditingInstructor(Object.assign({}, editingInstructor, { is_active: e.target.checked })); } }),
@@ -799,7 +799,7 @@ body.apex-light {
     function renderClassRow(cls) {
       var isEditing = editingClass && editingClass.id === cls.id;
       if (isEditing) {
-        return React.createElement("div", { key: cls.id, style: { padding: "10px 0", borderBottom: "1px solid #ffffff14" } },
+        return React.createElement("div", { key: cls.id || "new-class", style: { padding: "10px 0", borderBottom: "1px solid #ffffff14" } },
           React.createElement("label", { style: labelStyle }, "ชื่อคลาส"),
           React.createElement("input", { style: inputStyle, value: editingClass.name, onChange: function(e) { setEditingClass(Object.assign({}, editingClass, { name: e.target.value })); } }),
           React.createElement("label", { style: labelStyle }, "ครูผู้สอน"),
@@ -840,9 +840,11 @@ body.apex-light {
         errMsg && React.createElement("div", { style: { color: "#F87171", fontSize: 12, marginBottom: 10 } }, errMsg),
         loading ? React.createElement("div", { style: { color: "#9CA3AF", fontSize: 13, textAlign: "center", padding: "20px 0" } }, "กำลังโหลด...") :
         tab === "instructors" ? React.createElement(React.Fragment, null,
+          editingInstructor && editingInstructor.id === null && renderInstructorRow(editingInstructor),
           instructors.map(renderInstructorRow),
           React.createElement("button", { style: Object.assign({}, btnStyle, { marginTop: 12, width: "100%" }), onClick: function() { setEditingInstructor({ id: null, name: "", is_active: true }); setErrMsg(""); } }, "+ เพิ่มครูผู้สอน")
         ) : React.createElement(React.Fragment, null,
+          editingClass && editingClass.id === null && renderClassRow(editingClass),
           classTemplates.map(renderClassRow),
           React.createElement("button", { style: Object.assign({}, btnStyle, { marginTop: 12, width: "100%" }), onClick: function() { setEditingClass({ id: null, name: "", instructorId: null, defaultCapacity: 10, color: "#F97316", isActive: true, dayOfWeek: 1, defaultTime: "9:00", durationMin: 60, waitlistCap: 8, icon: "🏋️" }); setErrMsg(""); } }, "+ เพิ่มคลาสใหม่")
         ),
