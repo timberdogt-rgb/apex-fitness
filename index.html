@@ -683,6 +683,21 @@ body.apex-light {
   // ── Supabase (Phase 3 migration, 2026-08-12) ─────────────────────────
   const SUPABASE_URL = "https://adspnitwkayyazukialo.supabase.co";
   const SUPABASE_ANON_KEY = "sb_publishable_NHieWQ2k7B_7VTCmvLkiEQ_kYAPVwYM";
+  // [Feature #2 - Global Error Boundary] Capture runtime errors / unhandled promise rejections
+  window.__apexLastError = null;
+  function apexReportError(message, stack, context) {
+    window.__apexLastError = { message: String(message||"").slice(0,2000), stack: String(stack||"").slice(0,4000), context: context||"", ts: Date.now() };
+    try { window.dispatchEvent(new CustomEvent("apex:error", { detail: window.__apexLastError })); } catch(e) {}
+  }
+  window.onerror = function(msg, src, line, col, err) {
+    apexReportError(msg, err && err.stack, (src||"")+":"+line+":"+col);
+    return false;
+  };
+  window.addEventListener("unhandledrejection", function(ev) {
+    var reason = ev && ev.reason;
+    apexReportError(reason && reason.message ? reason.message : String(reason), reason && reason.stack, "unhandledrejection");
+  });
+
   // [Fix 2026-08-13] Universal phone normalizer — MUST match the format
   // already stored in Supabase (verified: no leading 0, no +66/66 country
   // code — e.g. "806289596"). Customers type their phone normally
@@ -698,6 +713,132 @@ body.apex-light {
     return str;
   }
   const sbClient = (typeof supabase !== "undefined") ? supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
+  // [Feature #2] Send a captured error report to Supabase system_errors table
+  async function apexSubmitErrorReport(detail, context, userId) {
+    try {
+      if (!sbClient) return { ok: false };
+      var r = await sbClient.rpc("rpc_report_system_error", {
+        p_message: (detail && detail.message) || "unknown error",
+        p_stack: (detail && detail.stack) || "",
+        p_context: context || (detail && detail.context) || "",
+        p_user_id: userId || "",
+        p_url: window.location.href,
+        p_user_agent: navigator.userAgent
+      });
+      return (r && r.data) ? r.data : { ok: !(r && r.error) };
+    } catch (e) { return { ok: false }; }
+  }
+
+  // [Feature #2] Global error toast/modal with "report to admin" action
+  function GlobalErrorBoundaryUI() {
+    var st = React.useState(null); var errInfo = st[0], setErrInfo = st[1];
+    var st2 = React.useState(false); var sent = st2[0], setSent = st2[1];
+    React.useEffect(function() {
+      function onErr(ev) { setErrInfo(ev.detail); setSent(false); }
+      window.addEventListener("apex:error", onErr);
+      return function() { window.removeEventListener("apex:error", onErr); };
+    }, []);
+    if (!errInfo) return null;
+    return React.createElement("div", { style: { position: "fixed", inset: 0, background: "rgba(0,0,0,.6)", zIndex: 99999, display: "flex", alignItems: "center", justifyContent: "center", padding: 20, fontFamily: FONT } },
+      React.createElement("div", { style: { background: "#1a1a24", border: "1px solid #EF444455", borderRadius: 16, padding: 24, maxWidth: 380, width: "100%", textAlign: "center" } },
+        React.createElement("div", { style: { fontSize: 36, marginBottom: 8 } }, "⚠️"),
+        React.createElement("div", { style: { fontSize: 17, fontWeight: 800, color: "#fff", marginBottom: 6 } }, "เกิดข้อผิดพลาดในระบบ"),
+        React.createElement("div", { style: { fontSize: 13, color: "#9CA3AF", marginBottom: 18 } }, sent ? "ส่งแจ้งปัญหาเรียบร้อยแล้ว ขอบคุณครับ" : "ระบบพบข้อผิดพลาด ลองใหม่อีกครั้ง หรือแจ้งทีมงานให้ตรวจสอบได้ทันที"),
+        !sent && React.createElement("button", { onClick: async function() { await apexSubmitErrorReport(errInfo, "client"); setSent(true); }, style: { width: "100%", padding: "12px 0", background: "#F97316", border: "none", borderRadius: 12, color: "#fff", fontWeight: 700, fontSize: 14, cursor: "pointer", marginBottom: 10, fontFamily: FONT } }, "📢 กดแจ้งทีมงาน / แอดมิน"),
+        React.createElement("button", { onClick: function() { setErrInfo(null); }, style: { width: "100%", padding: "10px 0", background: "transparent", border: "1px solid #ffffff22", borderRadius: 12, color: "#9CA3AF", fontWeight: 600, fontSize: 13, cursor: "pointer", fontFamily: FONT } }, "ปิด")
+      )
+    );
+  }
+
+  // [Feature #6] First-time-user guided login helper
+  function FirstTimeHelpModal(props) {
+    var st = React.useState(false); var open = st[0], setOpen = st[1];
+    return React.createElement(React.Fragment, null,
+      React.createElement("button", { onClick: function() { setOpen(true); }, style: { width: "100%", padding: "10px 0", marginTop: 10, background: "transparent", border: "none", color: "#9CA3AF", fontWeight: 600, fontSize: 13, cursor: "pointer", textDecoration: "underline", fontFamily: FONT } }, "💡 เข้าใช้งานครั้งแรก (ลูกค้าใหม่)"),
+      open && React.createElement("div", { style: { position: "fixed", inset: 0, background: "rgba(0,0,0,.6)", zIndex: 9998, display: "flex", alignItems: "center", justifyContent: "center", padding: 20, fontFamily: FONT }, onClick: function(e) { if (e.target === e.currentTarget) setOpen(false); } },
+        React.createElement("div", { style: { background: "#1a1a24", border: "1px solid #ffffff1a", borderRadius: 16, padding: 24, maxWidth: 380, width: "100%" } },
+          React.createElement("div", { style: { fontSize: 17, fontWeight: 800, color: "#fff", marginBottom: 16 } }, "💡 เข้าใช้งานครั้งแรก"),
+          React.createElement("div", { style: { fontSize: 13, color: "#D1D5DB", lineHeight: 1.8, marginBottom: 18 } },
+            React.createElement("div", { style: { marginBottom: 10 } }, "1️⃣ กรอกเบอร์โทรศัพท์ของคุณที่ลงทะเบียนไว้กับทางฟิตเนส"),
+            React.createElement("div", { style: { marginBottom: 10 } }, "2️⃣ ใช้รหัสผ่านเริ่มต้น: 1234"),
+            React.createElement("div", null, "3️⃣ เมื่อเข้าสู่ระบบสำเร็จ ระบบจะบังคับให้คุณตั้งรหัสผ่านใหม่ 4 หลักทันทีเพื่อความปลอดภัย")
+          ),
+          React.createElement("button", { onClick: function() { props.setPassword("1234"); if (props.setLoginMode) props.setLoginMode("password"); setOpen(false); }, style: { width: "100%", padding: "13px 0", background: "#F97316", border: "none", borderRadius: 12, color: "#fff", fontWeight: 800, fontSize: 14, cursor: "pointer", marginBottom: 10, fontFamily: FONT } }, "✓ ลองเข้าสู่ระบบเลย"),
+          React.createElement("button", { onClick: function() { setOpen(false); }, style: { width: "100%", padding: "10px 0", background: "transparent", border: "1px solid #ffffff22", borderRadius: 12, color: "#9CA3AF", fontWeight: 600, fontSize: 13, cursor: "pointer", fontFamily: FONT } }, "ปิด")
+        )
+      )
+    );
+  }
+
+  // [Feature #3 + #2 inbox] Admin/staff-only floating alert widget: duplicate phones + open system errors
+  function AdminAlertWidget() {
+    var stA = React.useState(false); var isAdminStaff = stA[0], setIsAdminStaff = stA[1];
+    var stD = React.useState([]); var dupGroups = stD[0], setDupGroups = stD[1];
+    var stE = React.useState([]); var openErrors = stE[0], setOpenErrors = stE[1];
+    var stM = React.useState(null); var modal = stM[0], setModal = stM[1];
+    React.useEffect(function() {
+      function checkAuth() {
+        try {
+          var a = JSON.parse(localStorage.getItem("apex_auth") || "null");
+          setIsAdminStaff(!!(a && (a.type === "owner" || a.type === "staff")));
+        } catch (e) { setIsAdminStaff(false); }
+      }
+      checkAuth();
+      document.addEventListener("visibilitychange", checkAuth);
+      window.addEventListener("storage", checkAuth);
+      var tid0 = setInterval(checkAuth, 5000);
+      return function() { document.removeEventListener("visibilitychange", checkAuth); window.removeEventListener("storage", checkAuth); clearInterval(tid0); };
+    }, []);
+    React.useEffect(function() {
+      if (!isAdminStaff || !sbClient) return;
+      var cancelled = false;
+      async function load() {
+        try { var d1 = await sbClient.rpc("rpc_get_duplicate_phones", {}); if (!cancelled && d1 && d1.data) setDupGroups(d1.data); } catch (e) {}
+        try { var d2 = await sbClient.rpc("rpc_get_open_system_errors", { p_limit: 50 }); if (!cancelled && d2 && d2.data) setOpenErrors(d2.data); } catch (e) {}
+      }
+      load();
+      var tid = setInterval(load, 60000);
+      return function() { cancelled = true; clearInterval(tid); };
+    }, [isAdminStaff]);
+    if (!isAdminStaff) return null;
+    var dupCount = dupGroups.length, errCount = openErrors.length;
+    if (dupCount === 0 && errCount === 0) return null;
+    return React.createElement(React.Fragment, null,
+      React.createElement("div", { style: { position: "fixed", top: 54, right: 8, zIndex: 60, display: "flex", flexDirection: "column", gap: 6, fontFamily: FONT } },
+        dupCount > 0 && React.createElement("button", { onClick: function() { setModal("dup"); }, style: { background: "#EF444422", border: "1px solid #EF444488", color: "#FCA5A5", borderRadius: 10, padding: "6px 10px", fontSize: 12, fontWeight: 700, cursor: "pointer" } }, "⚠️ พบเบอร์โทรศัพท์ซ้ำในระบบ (" + dupCount + " รายการ)"),
+        errCount > 0 && React.createElement("button", { onClick: function() { setModal("err"); }, style: { background: "#F9731622", border: "1px solid #F9731688", color: "#FDBA74", borderRadius: 10, padding: "6px 10px", fontSize: 12, fontWeight: 700, cursor: "pointer" } }, "🐞 ปัญหาระบบ (" + errCount + ")")
+      ),
+      modal && React.createElement("div", { style: { position: "fixed", inset: 0, background: "rgba(0,0,0,.6)", zIndex: 9997, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }, onClick: function(e) { if (e.target === e.currentTarget) setModal(null); } },
+        React.createElement("div", { style: { background: "#1a1a24", border: "1px solid #ffffff1a", borderRadius: 16, padding: 20, maxWidth: 520, width: "100%", maxHeight: "80vh", overflowY: "auto", fontFamily: FONT } },
+          modal === "dup" ? React.createElement(React.Fragment, null,
+            React.createElement("div", { style: { fontSize: 16, fontWeight: 800, color: "#fff", marginBottom: 14 } }, "⚠️ เบอร์โทรศัพท์ซ้ำ (" + dupCount + " กลุ่ม)"),
+            dupGroups.map(function(g, gi) {
+              return React.createElement("div", { key: "g" + gi, style: { border: "1px solid #ffffff14", borderRadius: 12, padding: 10, marginBottom: 10 } },
+                React.createElement("div", { style: { fontSize: 12, color: "#9CA3AF", marginBottom: 6 } }, "เบอร์: " + g.phone),
+                (g.members || []).map(function(m, mi) {
+                  return React.createElement("div", { key: "m" + mi, style: { display: "flex", justifyContent: "space-between", fontSize: 13, color: "#E5E7EB", padding: "4px 0", borderTop: mi > 0 ? "1px solid #ffffff0f" : "none" } },
+                    React.createElement("span", null, m.name + " (" + m.id + ")"),
+                    React.createElement("span", { style: { color: "#9CA3AF" } }, (m.joinDate || "-") + " → " + (m.membershipExpiry || "-"))
+                  );
+                })
+              );
+            })
+          ) : React.createElement(React.Fragment, null,
+            React.createElement("div", { style: { fontSize: 16, fontWeight: 800, color: "#fff", marginBottom: 14 } }, "🐞 ปัญหาระบบที่รอการตรวจสอบ (" + errCount + ")"),
+            openErrors.map(function(er, ei) {
+              return React.createElement("div", { key: "e" + ei, style: { border: "1px solid #ffffff14", borderRadius: 12, padding: 10, marginBottom: 8 } },
+                React.createElement("div", { style: { fontSize: 12, color: "#9CA3AF", marginBottom: 4 } }, new Date(er.created_at).toLocaleString("th-TH") + (er.context ? " · " + er.context : "")),
+                React.createElement("div", { style: { fontSize: 13, color: "#E5E7EB", marginBottom: 6, wordBreak: "break-word" } }, er.message),
+                React.createElement("button", { onClick: async function() { try { await sbClient.rpc("rpc_resolve_system_error", { p_id: er.id }); setOpenErrors(openErrors.filter(function(x) { return x.id !== er.id; })); } catch (e) {} }, style: { fontSize: 11, background: "transparent", border: "1px solid #ffffff33", color: "#9CA3AF", borderRadius: 8, padding: "3px 8px", cursor: "pointer" } }, "✓ รับทราบแล้ว")
+              );
+            })
+          ),
+          React.createElement("button", { onClick: function() { setModal(null); }, style: { width: "100%", padding: "10px 0", marginTop: 12, background: "transparent", border: "1px solid #ffffff22", borderRadius: 12, color: "#9CA3AF", fontWeight: 600, fontSize: 13, cursor: "pointer" } }, "ปิด")
+        )
+      )
+    );
+  }
+
   const SUPABASE_MIGRATED_ACTIONS = new Set([
     "loginPassword", "changeMemberPassword", "book", "cancel", "joinWaitlist", "cancelWaitlist",
     "checkin", "markAttendance", "adminAddGuest", "rescheduleGuestBooking", "confirmGuestPayment",
@@ -1951,7 +2092,7 @@ function LoginScreen({ onLogin, deviceId, members, onMembersUpdate, onGuestBooki
   /* @__PURE__ */ React.createElement("input", { value: password, onChange: (e) => { setPassword(e.target.value); setPwErr(""); }, type: "password", placeholder: _t("lgPassPh"), onKeyDown: (e) => e.key === "Enter" && loginWithPassword(), style: { width: "100%", padding: "14px 16px", background: C2.surfUp, border: `1.5px solid ${pwErr ? C2.red : C2.border}`, borderRadius: 12, color: C2.text, fontSize: 16, boxSizing: "border-box", outline: "none", fontFamily: FONT } }),
   pwErr ? /* @__PURE__ */ React.createElement("div", { style: { color: C2.red, marginTop: 10, padding: "10px 14px", background: C2.rM, borderRadius: 10, lineHeight: 1.6, fontSize: 13 } }, "⚠️ ", pwErr) : null,
   /* @__PURE__ */ React.createElement("button", { onClick: loginWithPassword, disabled: pwLoading || !phone || (!isAdmin(phone.toLowerCase().trim()) && !password), style: { width: "100%", padding: "15px 0", marginTop: 16, background: !phone || !password || pwLoading ? "#374151" : C2.orange, border: "none", borderRadius: 14, color: "#fff", fontWeight: 800, fontSize: 16, cursor: !phone || !password || pwLoading ? "default" : "pointer", fontFamily: FONT, transition: "all .2s", boxShadow: !phone || !password || pwLoading ? "none" : "0 4px 16px rgba(249,115,22,.4)" } }, pwLoading ? _t("lgSigningIn") : _t("lgSignIn")),
-  /* @__PURE__ */ React.createElement("div", { style: { textAlign: "center", marginTop: 14 } }, /* @__PURE__ */ React.createElement("a", { href: "#", onClick: (e) => { e.preventDefault(); setLoginMode("otp"); setPwErr(""); }, style: { fontSize: 12, color: C2.muted, textDecoration: "underline", cursor: "pointer" } }, _t("lgUseOtp"))),liffReady && /* @__PURE__ */ React.createElement("button", { onClick: handleLineLoginClick, disabled: lineLoading, style: { width: "100%", padding: "13px 0", marginTop: 14, background: "#06C755", border: "none", borderRadius: 14, color: "#fff", fontWeight: 700, fontSize: 14, cursor: lineLoading ? "default" : "pointer", fontFamily: FONT, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 } }, lineLoading ? "\u23F3..." : _t("lgLineBtn")), onGuestBooking && /* @__PURE__ */ React.createElement("button", { onClick: onGuestBooking, style: { width: "100%", padding: "12px 0", marginTop: 10, background: "transparent", border: `1.5px dashed ${C2.border}`, borderRadius: 14, color: C2.muted, fontWeight: 600, fontSize: 13, cursor: "pointer", fontFamily: FONT } }, _t("lgGuestBtn"))), step === "otp" && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("button", { onClick: () => {
+  /* @__PURE__ */ React.createElement("div", { style: { textAlign: "center", marginTop: 14 } }, /* @__PURE__ */ React.createElement("a", { href: "#", onClick: (e) => { e.preventDefault(); setLoginMode("otp"); setPwErr(""); }, style: { fontSize: 12, color: C2.muted, textDecoration: "underline", cursor: "pointer" } }, _t("lgUseOtp"))), React.createElement(FirstTimeHelpModal, {setPassword: setPassword, setLoginMode: setLoginMode}),liffReady && /* @__PURE__ */ React.createElement("button", { onClick: handleLineLoginClick, disabled: lineLoading, style: { width: "100%", padding: "13px 0", marginTop: 14, background: "#06C755", border: "none", borderRadius: 14, color: "#fff", fontWeight: 700, fontSize: 14, cursor: lineLoading ? "default" : "pointer", fontFamily: FONT, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 } }, lineLoading ? "\u23F3..." : _t("lgLineBtn")), onGuestBooking && /* @__PURE__ */ React.createElement("button", { onClick: onGuestBooking, style: { width: "100%", padding: "12px 0", marginTop: 10, background: "transparent", border: `1.5px dashed ${C2.border}`, borderRadius: 14, color: C2.muted, fontWeight: 600, fontSize: 13, cursor: "pointer", fontFamily: FONT } }, _t("lgGuestBtn"))), step === "otp" && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("button", { onClick: () => {
     setStep("phone");
     setOtp("");
     setErr("");
@@ -4848,6 +4989,15 @@ const unreadCount = useMemo(() => cur ? (notifications || []).filter((n) => n.mi
     ))));
 }
 ReactDOM.createRoot(document.getElementById("root")).render(/* @__PURE__ */ React.createElement(App));
+  try {
+    var _ebRoot = document.createElement("div"); _ebRoot.id = "apex-error-boundary-root";
+    (document.body || document.documentElement).appendChild(_ebRoot);
+    if (ReactDOM.createRoot) { ReactDOM.createRoot(_ebRoot).render(React.createElement(GlobalErrorBoundaryUI)); }
+    var _awRoot = document.createElement("div"); _awRoot.id = "apex-admin-alert-root";
+    (document.body || document.documentElement).appendChild(_awRoot);
+    if (ReactDOM.createRoot) { ReactDOM.createRoot(_awRoot).render(React.createElement(AdminAlertWidget)); }
+  } catch (e) {}
+
 requestAnimationFrame(() => requestAnimationFrame(() => {
   const _s = document.getElementById("splash");
   if (_s) _s.classList.add("hidden");
