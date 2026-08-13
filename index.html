@@ -689,13 +689,22 @@ body.apex-light {
     window.__apexLastError = { message: String(message||"").slice(0,2000), stack: String(stack||"").slice(0,4000), context: context||"", ts: Date.now() };
     try { window.dispatchEvent(new CustomEvent("apex:error", { detail: window.__apexLastError })); } catch(e) {}
   }
+  // Ignore noise from browser extensions injected into the page (MetaMask, etc.) - not app bugs.
+  function apexIsExtensionNoise(msg, src, stack) {
+    var s = String(src||"") + " " + String(stack||"") + " " + String(msg||"");
+    return /chrome-extension:\/\/|moz-extension:\/\/|safari-extension:\/\//.test(s);
+  }
   window.onerror = function(msg, src, line, col, err) {
+    if (apexIsExtensionNoise(msg, src, err && err.stack)) return false;
     apexReportError(msg, err && err.stack, (src||"")+":"+line+":"+col);
     return false;
   };
   window.addEventListener("unhandledrejection", function(ev) {
     var reason = ev && ev.reason;
-    apexReportError(reason && reason.message ? reason.message : String(reason), reason && reason.stack, "unhandledrejection");
+    var msg = reason && reason.message ? reason.message : String(reason);
+    var stack = reason && reason.stack;
+    if (apexIsExtensionNoise(msg, "", stack)) return;
+    apexReportError(msg, stack, "unhandledrejection");
   });
 
   // [Fix 2026-08-13] Universal phone normalizer — MUST match the format
