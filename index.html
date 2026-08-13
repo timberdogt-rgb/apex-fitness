@@ -984,7 +984,7 @@ body.apex-light {
   const SUPABASE_MIGRATED_ACTIONS = new Set([
     "loginPassword", "changeMemberPassword", "book", "cancel", "joinWaitlist", "cancelWaitlist",
     "checkin", "markAttendance", "adminAddGuest", "rescheduleGuestBooking", "confirmGuestPayment",
-    "getAttendanceHistory", "saveDailyClassSummary"
+    "getAttendanceHistory", "saveDailyClassSummary", "evaluateNoShows", "getHotClassesReport"
   ]);
   async function fetchAllRows(table, applyFilter) {
     let all = [];
@@ -1023,7 +1023,7 @@ body.apex-light {
     const members = (membersR.data || []).map(function(m) {
       return { id: m.id, name: m.name, phone: m.phone, pin: m.pin, lineId: m.line_id || "",
         membershipType: m.membership_type || "", membershipExpiry: m.membership_expiry || "",
-        sessionsLeft: (m.sessions_left == null ? "" : m.sessions_left), noShowCount: m.no_show_count || 0,
+        sessionsLeft: (m.sessions_left == null ? "" : m.sessions_left), noShowCount: m.no_show_count || 0, penaltyLevel: m.penalty_level || 0, noShowWindowStart: m.no_show_window_start || "",
         suspended: !!m.suspended, suspendedUntil: m.suspended_until || "", joinDate: m.join_date || "",
         passwordChanged: !!m.password_changed, deviceId: "", photoUrl: "", lineUserId: "",
         noShowDates: "", penaltyLevel: "", wlOptIn: "", noShowWindowStart: "" };
@@ -1042,10 +1042,10 @@ body.apex-light {
     });
     const bookings = (bookingsR.data || []).map(function(b) {
       return { id: b.id, sessionId: b.session_id, memberId: b.member_id,
-        type: (b.status === "waitlist" ? "waitlist" : "main"), createdAt: b.created_at };
+        type: (b.status === "waitlist" ? "waitlist" : "main"), status: b.status, createdAt: b.created_at };
     });
     const attendance = (attR.data || []).map(function(a) {
-      return { sessionId: a.session_id, memberId: a.member_id, status: a.status, markedAt: a.marked_at };
+      return { sessionId: a.session_id, memberId: a.member_id, status: a.status, markedAt: a.marked_at, checkInMethod: a.check_in_method || "" };
     });
     // [Fix 2026-08-13] Supabase is now the single source of truth for guest
     // bookings (previously merged with the legacy GAS sheet by id, which
@@ -1096,14 +1096,26 @@ body.apex-light {
         if (r.error) return { ok: false, error: "ลงชื่อคิวสำรองไม่สำเร็จ" };
         return r.data;
       }
-      if (action === "checkin" || action === "markAttendance") {
-        const status = (data.status === "noshow") ? "noshow" : "present";
-        const r = await sbClient.from("attendance").upsert(
-          { session_id: data.sessionId, member_id: String(data.memberId), status: status, marked_at: new Date().toISOString() },
-          { onConflict: "session_id,member_id" }
-        );
-        if (r.error) return { ok: false, error: "บันทึกเช็คชื่อไม่สำเร็จ" };
+      if (action === "checkin") {
+        const r = await sbClient.rpc("rpc_self_checkin", { p_session_id: data.sessionId, p_member_id: String(data.memberId) });
+        if (r.error || (r.data && r.data.ok === false)) return { ok: false, error: (r.data && r.data.error) || "บันทึกเช็คชื่อไม่สำเร็จ" };
         return { ok: true };
+      }
+      if (action === "markAttendance") {
+        const status = (data.status === "noshow") ? "noshow" : "present";
+        const r = await sbClient.rpc("rpc_mark_attendance_staff", { p_session_id: data.sessionId, p_member_id: String(data.memberId), p_status: status });
+        if (r.error || (r.data && r.data.ok === false)) return { ok: false, error: (r.data && r.data.error) || "บันทึกเช็คชื่อไม่สำเร็จ" };
+        return { ok: true };
+      }
+      if (action === "evaluateNoShows") {
+        const r = await sbClient.rpc("rpc_evaluate_session_no_shows", { p_session_id: data.sessionId });
+        if (r.error) return { ok: false, error: "ประเมินไม่สำเร็จ" };
+        return { ok: true, result: r.data };
+      }
+      if (action === "getHotClassesReport") {
+        const r = await sbClient.rpc("rpc_hot_classes_report", { p_period: data.period || "weekly" });
+        if (r.error) return { ok: false, error: "โหลดรายงานไม่สำเร็จ" };
+        return { ok: true, report: r.data };
       }
       if (action === "adminAddGuest") {
         const r = await sbClient.rpc("rpc_admin_add_guest", {
@@ -2623,6 +2635,24 @@ function AdminDashboard({ members, sessions, classes, guestBookings }) {
   });
 
   // stat rows
+  const todayBookedTotal = todayS.reduce((n, s) => n + s.bk.length, 0);
+  const todayAttendedTotal = todayS.reduce((n, s) => n + Object.values(s.att).filter((v) => v === "present").length, 0);
+  const dailyAttendanceRate = todayBookedTotal > 0 ? Math.round(todayAttendedTotal / todayBookedTotal * 100) : 0;
+  const curMonthPrefix = ts.slice(0, 7);
+  const monthlyActiveBookings = Object.values(sessions).filter((s) => s.date.slice(0, 7) === curMonthPrefix).reduce((n, s) => n + s.bk.length, 0);
+  const fillColor = (p) => p > 70 ? C.green : p >= 40 ? C.amber : C.red;
+  const primaryStats = [
+    { lb: "สมาชิกทั้งหมด (Total Members)", v: members.length, ic: "👥", cl: C.blue },
+    { lb: "สมาชิก Active (Active Subscriptions)", v: active, ic: "✅", cl: C.green },
+    { lb: "อัตราเข้าเรียนวันนี้ (Daily Attendance)", v: dailyAttendanceRate + "%", ic: "📈", cl: fillColor(dailyAttendanceRate) },
+    { lb: "การจองเดือนนี้ (Monthly Bookings)", v: monthlyActiveBookings, ic: "🗓️", cl: C.purple },
+  ];
+  const fillRateData = classes.slice(0, 8).map((cls) => {
+    const cl = Object.values(sessions).filter((s) => s.cid === cls.id);
+    const bk = cl.reduce((n, s) => n + s.bk.length, 0);
+    const cap = cl.reduce((n, s) => n + s.cap, 0);
+    return { id: cls.id, name: cls.name || "", ico: cls.ico || "", pct: cap > 0 ? Math.round(bk / cap * 100) : 0 };
+  });
   const topStats = [
     { lb: _t("ovClassesToday"), v: todayS.length, ic: "📅", cl: C.orange },
     { lb: _t("ovTotalBookings"), v: totalBkAll, ic: "🎟️", cl: C.green },
@@ -2649,6 +2679,22 @@ function AdminDashboard({ members, sessions, classes, guestBookings }) {
     );
 
   return /* @__PURE__ */ React.createElement("div", null,
+    /* @__PURE__ */ React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 } },
+      primaryStats.map((x) => /* @__PURE__ */ React.createElement(StatCard, { key: x.lb, ...x }))
+    ),
+    /* @__PURE__ */ React.createElement("div", { style: { background: C.surf, borderRadius: 14, border: `1px solid ${C.border}`, padding: 14, marginBottom: 14 } },
+      /* @__PURE__ */ React.createElement("div", { style: { fontSize: 13, fontWeight: 800, color: C.text, marginBottom: 4 } }, "📊 อัตราการจองเต็ม (Fill Rate)"),
+      /* @__PURE__ */ React.createElement("div", { style: { fontSize: 11, color: C.muted, marginBottom: 10 } }, "🟢 ดีมาก (>70%)   🟡 ปานกลาง (40-70%)   🔴 ควรปรับปรุง (<40%)"),
+      fillRateData.map((f) => /* @__PURE__ */ React.createElement("div", { key: f.id, style: { marginBottom: 10 } },
+        /* @__PURE__ */ React.createElement("div", { style: { display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 4 } },
+          /* @__PURE__ */ React.createElement("span", { style: { color: C.text } }, (f.ico ? f.ico + " " : "") + f.name),
+          /* @__PURE__ */ React.createElement("span", { style: { color: fillColor(f.pct), fontWeight: 800 } }, f.pct + "%")
+        ),
+        /* @__PURE__ */ React.createElement("div", { style: { width: "100%", height: 8, background: C.border, borderRadius: 6, overflow: "hidden" } },
+          /* @__PURE__ */ React.createElement("div", { style: { width: Math.min(100, f.pct) + "%", height: "100%", background: fillColor(f.pct), borderRadius: 6 } })
+        )
+      ))
+    ),
     /* @__PURE__ */ React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 10 } },
       topStats.map((x) => /* @__PURE__ */ React.createElement(StatCard, { key: x.lb, ...x }))
     ),
@@ -2871,6 +2917,10 @@ function AdminAttendance({ sessions, members, guestBookings, onMark, onPromoteWL
   };
   const ds = fmt(shift(TODAY, day));
   const list = Object.values(sessions).filter((s) => s.date === ds).sort((a, b) => a.t.localeCompare(b.t));
+  React.useEffect(function() {
+    if (!postAction || ds > fmt(TODAY)) return;
+    list.forEach(function(s) { postAction("evaluateNoShows", { sessionId: s.id }).catch(function() {}); });
+  }, [ds]);
   return /* @__PURE__ */ React.createElement("div", null, detailMember && /* @__PURE__ */ React.createElement(Overlay, { onClose: () => setDetailMember(null) },
       /* @__PURE__ */ React.createElement("div", { style: { color: C.text } },
         /* @__PURE__ */ React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 14, marginBottom: 18 } },
@@ -3671,6 +3721,60 @@ function AdminFeedback({ feedback, onResolve, showToast }) {
   };
   return /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("div", { style: { color: C.muted, fontSize: 11, fontWeight: 700, letterSpacing: 2, marginBottom: 10 } }, "\u{1F4AC} \u0E23\u0E2D\u0E15\u0E2D\u0E1A (", open.length, ")"), open.length === 0 ? /* @__PURE__ */ React.createElement("div", { style: { textAlign: "center", padding: "40px 0", color: C.muted, fontSize: 13 } }, "\u0E44\u0E21\u0E48\u0E21\u0E35\u0E02\u0E49\u0E2D\u0E04\u0E27\u0E32\u0E21\u0E23\u0E2D\u0E15\u0E2D\u0E1A") : open.map((f) => /* @__PURE__ */ React.createElement("div", { key: f.id, style: { background: C.surf, borderRadius: 14, border: `1px solid ${f.type === "issue" ? C.red : C.border}`, padding: 16, marginBottom: 12 } }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", justifyContent: "space-between", marginBottom: 6 } }, /* @__PURE__ */ React.createElement("span", { style: { fontSize: 12, fontWeight: 700, color: f.type === "issue" ? C.red : C.blue } }, f.type === "issue" ? "\u26A0\uFE0F \u0E41\u0E08\u0E49\u0E07\u0E1B\u0E31\u0E0D\u0E2B\u0E32" : "\u{1F4A1} \u0E02\u0E49\u0E2D\u0E40\u0E2A\u0E19\u0E2D\u0E41\u0E19\u0E30"), /* @__PURE__ */ React.createElement("span", { style: { color: C.muted, fontSize: 11 } }, timeAgo(f.createdAt))), /* @__PURE__ */ React.createElement("div", { style: { color: C.text, fontWeight: 700, fontSize: 13, marginBottom: 4 } }, f.memberName || f.memberId), /* @__PURE__ */ React.createElement("div", { style: { color: C.sub, fontSize: 13, lineHeight: 1.6, marginBottom: 10 } }, f.message), responding === f.id ? /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("textarea", { value: responseText, onChange: (e) => setResponseText(e.target.value), placeholder: "\u0E1E\u0E34\u0E21\u0E1E\u0E4C\u0E04\u0E33\u0E15\u0E2D\u0E1A\u0E01\u0E25\u0E31\u0E1A (\u0E08\u0E30\u0E2A\u0E48\u0E07\u0E41\u0E08\u0E49\u0E07\u0E2A\u0E21\u0E32\u0E0A\u0E34\u0E01)...", rows: 3, style: { width: "100%", padding: 10, background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, color: C.text, fontSize: 13, boxSizing: "border-box", fontFamily: FONT, marginBottom: 8 } }), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 8 } }, /* @__PURE__ */ React.createElement(Btn, { label: "\u0E22\u0E01\u0E40\u0E25\u0E34\u0E01", bg: C.surf, col: C.muted, onClick: () => setResponding(null), full: true, disabled: busy }), /* @__PURE__ */ React.createElement(Btn, { label: "\u2713 \u0E2A\u0E48\u0E07\u0E04\u0E33\u0E15\u0E2D\u0E1A", bg: C.green, onClick: () => handleResolve(f.id, true), full: true, disabled: busy }))) : /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 8 } }, /* @__PURE__ */ React.createElement(Btn, { label: "\u0E1B\u0E34\u0E14\u0E42\u0E14\u0E22\u0E44\u0E21\u0E48\u0E15\u0E2D\u0E1A", bg: C.surf, col: C.muted, onClick: () => handleResolve(f.id, false), full: true, disabled: busy }), /* @__PURE__ */ React.createElement(Btn, { label: "\u{1F4AC} \u0E15\u0E2D\u0E1A\u0E01\u0E25\u0E31\u0E1A", bg: C.bM, col: C.blue, onClick: () => { setResponding(f.id); setResponseText(""); }, full: true, disabled: busy })))), resolved.length > 0 && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { style: { color: C.muted, fontSize: 11, fontWeight: 700, letterSpacing: 2, marginTop: 20, marginBottom: 10 } }, "\u0E15\u0E2D\u0E1A\u0E41\u0E25\u0E49\u0E27"), resolved.map((f) => /* @__PURE__ */ React.createElement("div", { key: f.id, style: { padding: "9px 12px", background: C.surf, borderRadius: 10, border: `1px solid ${C.border}`, marginBottom: 6 } }, /* @__PURE__ */ React.createElement("div", { style: { color: C.text, fontSize: 12, fontWeight: 600 } }, f.memberName, " \xB7 ", f.type === "issue" ? "\u26A0\uFE0F" : "\u{1F4A1}", " ", f.message.slice(0, 60)), f.response && /* @__PURE__ */ React.createElement("div", { style: { color: C.muted, fontSize: 11, marginTop: 3 } }, "\u2192 ", f.response)))));
 }
+
+function HotClassesSection({ postAction }) {
+  const [period, setPeriod] = React.useState("weekly");
+  const [report, setReport] = React.useState(null);
+  const [loading, setLoading] = React.useState(true);
+  const [err, setErr] = React.useState("");
+
+  React.useEffect(function() {
+    let cancelled = false;
+    setLoading(true); setErr("");
+    postAction("getHotClassesReport", { period: period }).then(function(res) {
+      if (cancelled) return;
+      if (res && res.ok && res.report) setReport(res.report);
+      else setErr((res && res.error) || "โหลดรายงานไม่สำเร็จ");
+      setLoading(false);
+    }).catch(function() {
+      if (!cancelled) { setErr("โหลดรายงานไม่สำเร็จ"); setLoading(false); }
+    });
+    return function() { cancelled = true; };
+  }, [period, postAction]);
+
+  function fillColor(pct) { return pct > 70 ? C.green : pct >= 40 ? C.amber : C.red; }
+
+  function renderRow(c, idx, kind) {
+    return /* @__PURE__ */ React.createElement("div", { key: c.class_id + "_" + kind, style: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 0", borderBottom: idx < 4 ? `1px solid ${C.border}` : "none" } },
+      /* @__PURE__ */ React.createElement("div", null,
+        /* @__PURE__ */ React.createElement("div", { style: { fontSize: 13, fontWeight: 700, color: C.text } }, (kind === "hot" ? "🔥 " : "🧊 ") + (c.class_name || "") + (c.instructor ? " · " + c.instructor : "")),
+        /* @__PURE__ */ React.createElement("div", { style: { fontSize: 11, color: C.muted, marginTop: 2 } }, `เข้าเรียน ${c.attendance_rate_pct}% · ขาดเรียน ${c.dropout_rate_pct}% · ${c.session_count} คลาส`)
+      ),
+      /* @__PURE__ */ React.createElement("div", { style: { fontWeight: 900, fontSize: 14, color: fillColor(c.fill_rate_pct) } }, c.fill_rate_pct + "%")
+    );
+  }
+
+  return /* @__PURE__ */ React.createElement("div", { style: { background: C.surf, borderRadius: 14, border: `1px solid ${C.border}`, padding: 14, marginBottom: 14 } },
+    /* @__PURE__ */ React.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10, flexWrap: "wrap", gap: 8 } },
+      /* @__PURE__ */ React.createElement("div", { style: { fontSize: 14, fontWeight: 800, color: C.text } }, "📊 สรุปอันดับคลาส (Hot Classes)"),
+      /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 6 } },
+        /* @__PURE__ */ React.createElement("button", { onClick: function() { setPeriod("weekly"); }, style: { padding: "5px 10px", borderRadius: 8, border: "none", cursor: "pointer", fontSize: 12, fontWeight: 700, background: period === "weekly" ? C.orange : "transparent", color: period === "weekly" ? "#fff" : C.muted } }, "รายสัปดาห์"),
+        /* @__PURE__ */ React.createElement("button", { onClick: function() { setPeriod("monthly"); }, style: { padding: "5px 10px", borderRadius: 8, border: "none", cursor: "pointer", fontSize: 12, fontWeight: 700, background: period === "monthly" ? C.orange : "transparent", color: period === "monthly" ? "#fff" : C.muted } }, "รายเดือน")
+      )
+    ),
+    loading ? /* @__PURE__ */ React.createElement("div", { style: { color: C.muted, fontSize: 13, textAlign: "center", padding: "14px 0" } }, "กำลังโหลด...") :
+    err ? /* @__PURE__ */ React.createElement("div", { style: { color: C.red, fontSize: 13 } }, err) :
+    /* @__PURE__ */ React.createElement(React.Fragment, null,
+      /* @__PURE__ */ React.createElement("div", { style: { fontSize: 12, fontWeight: 700, color: C.muted, marginBottom: 6 } }, "🔥 คลาสยอดนิยม (Hot Classes)"),
+      (!report.hot_classes || report.hot_classes.length === 0) ? /* @__PURE__ */ React.createElement("div", { style: { color: C.muted, fontSize: 12, marginBottom: 10 } }, "ยังไม่มีข้อมูลเพียงพอ") :
+        report.hot_classes.map(function(c, i) { return renderRow(c, i, "hot"); }),
+      /* @__PURE__ */ React.createElement("div", { style: { fontSize: 12, fontWeight: 700, color: C.muted, margin: "14px 0 6px" } }, "🧊 คลาสที่ต้องปรับปรุง (Underperforming)"),
+      (!report.underperforming || report.underperforming.length === 0) ? /* @__PURE__ */ React.createElement("div", { style: { color: C.muted, fontSize: 12 } }, "ยังไม่มีข้อมูลเพียงพอ") :
+        report.underperforming.map(function(c, i) { return renderRow(c, i, "cold"); })
+    )
+  );
+}
+
 function AdminReports({ sessions, members, classes, showToast, postAction }) {
   const healIds = (str) => {
     if (!str) return [];
@@ -3714,6 +3818,7 @@ const { useState } = React;
   };
 
   return /* @__PURE__ */ React.createElement("div", null,
+    /* @__PURE__ */ React.createElement(HotClassesSection, { postAction }),
     /* @__PURE__ */ React.createElement("div", { style: { display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:14 } },
       [
         ["\u{1F3AB}", "การจอง", totalBk, C.orange],
@@ -4537,45 +4642,6 @@ function App() {
       if (((_a = prev[sid]) == null ? void 0 : _a.att[mid]) === status) return prev;
       const ns = __spreadProps(__spreadValues({}, prev), { [sid]: __spreadProps(__spreadValues({}, prev[sid]), { att: __spreadProps(__spreadValues({}, prev[sid].att), { [mid]: status }) }) });
       save("apex_sessions", ns);
-      if (status === "noshow") {
-        setMembers((pm) => {
-          const nm = pm.map((m) => {
-            if (m.id !== mid) return m;
-            const today = fmt(TODAY);
-            const rawN = (m.noShowCount || 0) + 1;
-            let windowStart = m.noShowWindowStart || today;
-            let level = m.penaltyLevel || 0;
-            // Check if 90-day window has expired \u2192 reset
-            const daysSince = Math.floor((new Date(today) - new Date(windowStart)) / 86400000);
-            let n = rawN, effectiveWindowStart = windowStart, effectiveLevel = level;
-            if (isNaN(daysSince) || daysSince > 90) {
-              n = 1; effectiveWindowStart = today; effectiveLevel = 0;
-            }
-            const inWindow30 = Math.floor((new Date(today) - new Date(effectiveWindowStart)) / 86400000) <= 30;
-            // L2: already L1, another no-show within 90-day window
-            if (effectiveLevel >= 1 && !m.suspended) {
-              showToast(`\u{1F6AB} ${m.name} \u0E23\u0E30\u0E07\u0E31\u0E1A L2 (14 \u0E27\u0E31\u0E19)`, "warn");
-              pushNotif(mid, "suspended", "\u{1F6AB} \u0E23\u0E30\u0E07\u0E31\u0E1A L2", "No-show \u0E0B\u0E49\u0E33\u0E43\u0E19  90 \u0E27\u0E31\u0E19 \u0E23\u0E30\u0E07\u0E31\u0E1A 14 \u0E27\u0E31\u0E19");
-              return __spreadProps(__spreadValues({}, m), { noShowCount: n, penaltyLevel: 2, suspended: true, suspendedUntil: fmt(shift(TODAY, 14)), noShowWindowStart: effectiveWindowStart });
-            }
-            // L1: 3+ no-shows within 30 days
-            if (n >= 3 && inWindow30 && effectiveLevel === 0 && !m.suspended) {
-              showToast(`\u{1F6AB} ${m.name} \u0E23\u0E30\u0E07\u0E31\u0E1A L1 (7 \u0E27\u0E31\u0E19)`, "warn");
-              pushNotif(mid, "suspended", "\u{1F6AB} \u0E23\u0E30\u0E07\u0E31\u0E1A L1", "No-show 3 \u0E04\u0E23\u0E31\u0E49\u0E07\u0E43\u0E19 30 \u0E27\u0E31\u0E19 \u0E23\u0E30\u0E07\u0E31\u0E1A 7 \u0E27\u0E31\u0E19");
-              return __spreadProps(__spreadValues({}, m), { noShowCount: n, penaltyLevel: 1, suspended: true, suspendedUntil: fmt(shift(TODAY, 7)), noShowWindowStart: effectiveWindowStart });
-            }
-            // Count only
-            if (!m.suspended) {
-              const rem = effectiveLevel === 0 ? Math.max(0, 3 - n) : 0;
-              showToast(`\u26A0\uFE0F ${m.name} no-show \u0E04\u0E23\u0E31\u0E49\u0E07\u0E17\u0E35\u0E48 ${n}` + (rem > 0 ? ` (\u0E2D\u0E35\u0E01 ${rem} \u0E04\u0E23\u0E31\u0E49\u0E07\u0E16\u0E39\u0E01\u0E23\u0E30\u0E07\u0E31\u0E1A)` : ""), "warn");
-              pushNotif(mid, "info", "\u26A0\uFE0F \u0E1A\u0E31\u0E19\u0E17\u0E36\u0E01 No-show", `No-show \u0E04\u0E23\u0E31\u0E49\u0E07\u0E17\u0E35\u0E48 ${n}`);
-            }
-            return __spreadProps(__spreadValues({}, m), { noShowCount: n, noShowWindowStart: effectiveWindowStart, penaltyLevel: effectiveLevel });
-          });
-          save("apex_members", nm);
-          return nm;
-        });
-      }
       return ns;
     });
     postAction("markAttendance", { sessionId: sid, memberId: mid, status });
