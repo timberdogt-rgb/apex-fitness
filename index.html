@@ -722,6 +722,135 @@ body.apex-light {
     return str;
   }
   const sbClient = (typeof supabase !== "undefined") ? supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
+
+  function ClassManagementModal(props) {
+    var stI = React.useState([]); var instructors = stI[0], setInstructors = stI[1];
+    var stC = React.useState([]); var classTemplates = stC[0], setClassTemplates = stC[1];
+    var stTab = React.useState("classes"); var tab = stTab[0], setTab = stTab[1];
+    var stLoad = React.useState(true); var loading = stLoad[0], setLoading = stLoad[1];
+    var stEditI = React.useState(null); var editingInstructor = stEditI[0], setEditingInstructor = stEditI[1];
+    var stEditC = React.useState(null); var editingClass = stEditC[0], setEditingClass = stEditC[1];
+    var stSaving = React.useState(false); var saving = stSaving[0], setSaving = stSaving[1];
+    var stErr = React.useState(""); var errMsg = stErr[0], setErrMsg = stErr[1];
+
+    function loadAll() {
+      setLoading(true);
+      setErrMsg("");
+      var p1 = sbClient ? sbClient.rpc("rpc_admin_list_instructors", {}) : Promise.resolve({ data: [] });
+      var p2 = sbClient ? sbClient.rpc("rpc_admin_list_class_templates", {}) : Promise.resolve({ data: [] });
+      Promise.all([p1, p2]).then(function(res) {
+        if (res[0] && res[0].data) setInstructors(res[0].data);
+        if (res[1] && res[1].data) setClassTemplates(res[1].data);
+        setLoading(false);
+      }).catch(function(e) {
+        setErrMsg("โหลดข้อมูลไม่สำเร็จ กรุณาลองใหม่");
+        setLoading(false);
+      });
+    }
+    React.useEffect(function() { loadAll(); }, []);
+
+    function saveInstructor(ins) {
+      if (!ins.name || !ins.name.trim()) { setErrMsg("กรุณากรอกชื่อครูผู้สอน"); return; }
+      setSaving(true); setErrMsg("");
+      sbClient.rpc("rpc_admin_upsert_instructor", { p_id: ins.id || null, p_name: ins.name.trim(), p_is_active: ins.is_active !== false })
+        .then(function() { loadAll(); setEditingInstructor(null); setSaving(false); })
+        .catch(function(e) { setErrMsg("บันทึกไม่สำเร็จ: " + (e && e.message ? e.message : "unknown error")); setSaving(false); });
+    }
+    function saveClass(cls) {
+      if (!cls.name || !cls.name.trim()) { setErrMsg("กรุณากรอกชื่อคลาส"); return; }
+      setSaving(true); setErrMsg("");
+      sbClient.rpc("rpc_admin_upsert_class_template", {
+        p_id: cls.id || null, p_name: cls.name.trim(), p_instructor_id: cls.instructorId || null,
+        p_default_capacity: parseInt(cls.defaultCapacity, 10) || 10, p_color: cls.color || "#F97316",
+        p_is_active: cls.isActive !== false, p_day_of_week: parseInt(cls.dayOfWeek, 10) || 0,
+        p_default_time: cls.defaultTime || "9:00", p_duration_min: parseInt(cls.durationMin, 10) || 60,
+        p_waitlist_cap: parseInt(cls.waitlistCap, 10) || 8, p_icon: cls.icon || "🏋️"
+      }).then(function() { loadAll(); setEditingClass(null); setSaving(false); })
+        .catch(function(e) { setErrMsg("บันทึกไม่สำเร็จ: " + (e && e.message ? e.message : "unknown error")); setSaving(false); });
+    }
+
+    var inputStyle = { width: "100%", padding: "8px 10px", background: "#0f0f16", border: "1px solid #ffffff22", borderRadius: 8, color: "#fff", fontSize: 13, fontFamily: FONT, boxSizing: "border-box", marginBottom: 8 };
+    var labelStyle = { fontSize: 11, color: "#9CA3AF", marginBottom: 3, display: "block" };
+    var btnStyle = { padding: "6px 12px", background: "#F97316", border: "none", borderRadius: 8, color: "#fff", fontWeight: 700, fontSize: 12, cursor: "pointer", fontFamily: FONT };
+    var btnMuted = { padding: "6px 12px", background: "transparent", border: "1px solid #ffffff33", borderRadius: 8, color: "#9CA3AF", fontWeight: 600, fontSize: 12, cursor: "pointer", fontFamily: FONT };
+    var rowStyle = { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 0", borderBottom: "1px solid #ffffff14" };
+
+    function renderInstructorRow(ins) {
+      var isEditing = editingInstructor && editingInstructor.id === ins.id;
+      if (isEditing) {
+        return React.createElement("div", { key: ins.id, style: { padding: "10px 0", borderBottom: "1px solid #ffffff14" } },
+          React.createElement("input", { style: inputStyle, value: editingInstructor.name, onChange: function(e) { setEditingInstructor(Object.assign({}, editingInstructor, { name: e.target.value })); }, placeholder: "ชื่อครูผู้สอน" }),
+          React.createElement("label", { style: { fontSize: 12, color: "#D1D5DB", display: "flex", alignItems: "center", gap: 6, marginBottom: 8 } },
+            React.createElement("input", { type: "checkbox", checked: editingInstructor.is_active !== false, onChange: function(e) { setEditingInstructor(Object.assign({}, editingInstructor, { is_active: e.target.checked })); } }),
+            "เปิดใช้งาน"
+          ),
+          React.createElement("div", { style: { display: "flex", gap: 8 } },
+            React.createElement("button", { style: btnStyle, disabled: saving, onClick: function() { saveInstructor(editingInstructor); } }, saving ? "กำลังบันทึก..." : "บันทึก"),
+            React.createElement("button", { style: btnMuted, onClick: function() { setEditingInstructor(null); setErrMsg(""); } }, "ยกเลิก")
+          )
+        );
+      }
+      return React.createElement("div", { key: ins.id, style: rowStyle },
+        React.createElement("div", { style: { color: ins.is_active === false ? "#6B7280" : "#fff", fontSize: 13 } }, ins.name + (ins.is_active === false ? " (ปิดใช้งาน)" : "")),
+        React.createElement("button", { style: btnMuted, onClick: function() { setEditingInstructor({ id: ins.id, name: ins.name, is_active: ins.is_active }); setErrMsg(""); } }, "แก้ไข")
+      );
+    }
+
+    function renderClassRow(cls) {
+      var isEditing = editingClass && editingClass.id === cls.id;
+      if (isEditing) {
+        return React.createElement("div", { key: cls.id, style: { padding: "10px 0", borderBottom: "1px solid #ffffff14" } },
+          React.createElement("label", { style: labelStyle }, "ชื่อคลาส"),
+          React.createElement("input", { style: inputStyle, value: editingClass.name, onChange: function(e) { setEditingClass(Object.assign({}, editingClass, { name: e.target.value })); } }),
+          React.createElement("label", { style: labelStyle }, "ครูผู้สอน"),
+          React.createElement("select", { style: inputStyle, value: editingClass.instructorId || "", onChange: function(e) { setEditingClass(Object.assign({}, editingClass, { instructorId: e.target.value || null })); } },
+            React.createElement("option", { value: "" }, "-- ไม่ระบุ --"),
+            instructors.map(function(i) { return React.createElement("option", { key: i.id, value: i.id }, i.name); })
+          ),
+          React.createElement("label", { style: labelStyle }, "จำนวนที่นั่ง"),
+          React.createElement("input", { style: inputStyle, type: "number", value: editingClass.defaultCapacity, onChange: function(e) { setEditingClass(Object.assign({}, editingClass, { defaultCapacity: e.target.value })); } }),
+          React.createElement("label", { style: labelStyle }, "สี (hex)"),
+          React.createElement("input", { style: inputStyle, type: "color", value: editingClass.color || "#F97316", onChange: function(e) { setEditingClass(Object.assign({}, editingClass, { color: e.target.value })); } }),
+          React.createElement("label", { style: { fontSize: 12, color: "#D1D5DB", display: "flex", alignItems: "center", gap: 6, marginBottom: 8 } },
+            React.createElement("input", { type: "checkbox", checked: editingClass.isActive !== false, onChange: function(e) { setEditingClass(Object.assign({}, editingClass, { isActive: e.target.checked })); } }),
+            "เปิดใช้งาน"
+          ),
+          React.createElement("div", { style: { display: "flex", gap: 8 } },
+            React.createElement("button", { style: btnStyle, disabled: saving, onClick: function() { saveClass(editingClass); } }, saving ? "กำลังบันทึก..." : "บันทึก"),
+            React.createElement("button", { style: btnMuted, onClick: function() { setEditingClass(null); setErrMsg(""); } }, "ยกเลิก")
+          )
+        );
+      }
+      return React.createElement("div", { key: cls.id, style: rowStyle },
+        React.createElement("div", null,
+          React.createElement("div", { style: { color: cls.isActive === false ? "#6B7280" : "#fff", fontSize: 13, fontWeight: 600 } }, (cls.icon || "") + " " + cls.name + (cls.isActive === false ? " (ปิดใช้งาน)" : "")),
+          React.createElement("div", { style: { color: "#9CA3AF", fontSize: 11, marginTop: 2 } }, (cls.instructor || "-") + " · " + cls.defaultCapacity + " ที่นั่ง")
+        ),
+        React.createElement("button", { style: btnMuted, onClick: function() { setEditingClass({ id: cls.id, name: cls.name, instructorId: cls.instructorId, defaultCapacity: cls.defaultCapacity, color: cls.color, isActive: cls.isActive, dayOfWeek: cls.dayOfWeek, defaultTime: cls.defaultTime, durationMin: cls.durationMin, waitlistCap: cls.waitlistCap, icon: cls.icon }); setErrMsg(""); } }, "แก้ไข")
+      );
+    }
+
+    return React.createElement("div", { style: { position: "fixed", inset: 0, background: "rgba(0,0,0,.6)", zIndex: 9996, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }, onClick: function(e) { if (e.target === e.currentTarget) props.onClose(); } },
+      React.createElement("div", { style: { background: "#1a1a24", border: "1px solid #ffffff1a", borderRadius: 16, padding: 20, maxWidth: 560, width: "100%", maxHeight: "85vh", overflowY: "auto", fontFamily: FONT } },
+        React.createElement("div", { style: { fontSize: 16, fontWeight: 800, color: "#fff", marginBottom: 14 } }, "⚙️ จัดการคลาส & ครูผู้สอน"),
+        React.createElement("div", { style: { display: "flex", gap: 8, marginBottom: 14 } },
+          React.createElement("button", { onClick: function() { setTab("classes"); }, style: Object.assign({}, tab === "classes" ? btnStyle : btnMuted) }, "คลาส (" + classTemplates.length + ")"),
+          React.createElement("button", { onClick: function() { setTab("instructors"); }, style: Object.assign({}, tab === "instructors" ? btnStyle : btnMuted) }, "ครูผู้สอน (" + instructors.length + ")")
+        ),
+        errMsg && React.createElement("div", { style: { color: "#F87171", fontSize: 12, marginBottom: 10 } }, errMsg),
+        loading ? React.createElement("div", { style: { color: "#9CA3AF", fontSize: 13, textAlign: "center", padding: "20px 0" } }, "กำลังโหลด...") :
+        tab === "instructors" ? React.createElement(React.Fragment, null,
+          instructors.map(renderInstructorRow),
+          React.createElement("button", { style: Object.assign({}, btnStyle, { marginTop: 12, width: "100%" }), onClick: function() { setEditingInstructor({ id: null, name: "", is_active: true }); setErrMsg(""); } }, "+ เพิ่มครูผู้สอน")
+        ) : React.createElement(React.Fragment, null,
+          classTemplates.map(renderClassRow),
+          React.createElement("button", { style: Object.assign({}, btnStyle, { marginTop: 12, width: "100%" }), onClick: function() { setEditingClass({ id: null, name: "", instructorId: null, defaultCapacity: 10, color: "#F97316", isActive: true, dayOfWeek: 1, defaultTime: "9:00", durationMin: 60, waitlistCap: 8, icon: "🏋️" }); setErrMsg(""); } }, "+ เพิ่มคลาสใหม่")
+        ),
+        React.createElement("button", { onClick: props.onClose, style: { width: "100%", padding: "10px 0", marginTop: 12, background: "transparent", border: "1px solid #ffffff22", borderRadius: 12, color: "#9CA3AF", fontWeight: 600, fontSize: 13, cursor: "pointer" } }, "ปิด")
+      )
+    );
+  }
+
   // [Feature #2] Send a captured error report to Supabase system_errors table
   async function apexSubmitErrorReport(detail, context, userId) {
     try {
@@ -785,6 +914,7 @@ body.apex-light {
     var stD = React.useState([]); var dupGroups = stD[0], setDupGroups = stD[1];
     var stE = React.useState([]); var openErrors = stE[0], setOpenErrors = stE[1];
     var stM = React.useState(null); var modal = stM[0], setModal = stM[1];
+    var stCM = React.useState(false); var showClassMgmt = stCM[0], setShowClassMgmt = stCM[1];
     React.useEffect(function() {
       function checkAuth() {
         try {
@@ -811,9 +941,9 @@ body.apex-light {
     }, [isAdminStaff]);
     if (!isAdminStaff) return null;
     var dupCount = dupGroups.length, errCount = openErrors.length;
-    if (dupCount === 0 && errCount === 0) return null;
     return React.createElement(React.Fragment, null,
       React.createElement("div", { style: { position: "fixed", top: 54, right: 8, zIndex: 60, display: "flex", flexDirection: "column", gap: 6, fontFamily: FONT } },
+        React.createElement("button", { onClick: function() { setShowClassMgmt(true); }, style: { background: "#ffffff14", border: "1px solid #ffffff33", color: "#E5E7EB", borderRadius: 10, padding: "6px 10px", fontSize: 12, fontWeight: 700, cursor: "pointer" } }, "\u2699\uFE0F จัดการคลาส"),
         dupCount > 0 && React.createElement("button", { onClick: function() { setModal("dup"); }, style: { background: "#EF444422", border: "1px solid #EF444488", color: "#FCA5A5", borderRadius: 10, padding: "6px 10px", fontSize: 12, fontWeight: 700, cursor: "pointer" } }, "⚠️ พบเบอร์โทรศัพท์ซ้ำในระบบ (" + dupCount + " รายการ)"),
         errCount > 0 && React.createElement("button", { onClick: function() { setModal("err"); }, style: { background: "#F9731622", border: "1px solid #F9731688", color: "#FDBA74", borderRadius: 10, padding: "6px 10px", fontSize: 12, fontWeight: 700, cursor: "pointer" } }, "🐞 ปัญหาระบบ (" + errCount + ")")
       ),
@@ -844,7 +974,8 @@ body.apex-light {
           ),
           React.createElement("button", { onClick: function() { setModal(null); }, style: { width: "100%", padding: "10px 0", marginTop: 12, background: "transparent", border: "1px solid #ffffff22", borderRadius: 12, color: "#9CA3AF", fontWeight: 600, fontSize: 13, cursor: "pointer" } }, "ปิด")
         )
-      )
+      ),
+      showClassMgmt && React.createElement(ClassManagementModal, { onClose: function() { setShowClassMgmt(false); } })
     );
   }
 
@@ -879,7 +1010,7 @@ body.apex-light {
     // .range() until exhausted so this can never silently truncate again.
     const results = await Promise.all([
       fetchAllRows("members"),
-      fetchAllRows("classes"),
+      fetchAllRows("class_templates"),
       fetchAllRows("sessions"),
       fetchAllRows("bookings", function(q) { return q.neq("status", "cancelled"); }),
       fetchAllRows("guest_bookings", function(q) { return q.not("status", "in", "(cancelled,rejected)"); }),
@@ -897,8 +1028,8 @@ body.apex-light {
     });
     const classes = (classesR.data || []).map(function(c) {
       return { id: c.id, name: c.name, instructor: c.instructor || "", time: c.default_time,
-        duration: c.duration_min, capacity: c.capacity, waitlistCap: c.waitlist_cap,
-        days: c.day_of_week, color: c.color || "", icon: c.icon || "", popular: !!c.popular, active: c.active !== false };
+        duration: c.duration_min, capacity: c.default_capacity, waitlistCap: c.waitlist_cap,
+        days: c.day_of_week, color: c.color || "", icon: c.icon || "", popular: !!c.popular, active: c.is_active !== false };
     });
     const classMap = {};
     classes.forEach(function(c) { classMap[c.id] = c; });
