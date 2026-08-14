@@ -1027,6 +1027,27 @@ body.apex-light {
     var stE = React.useState([]); var openErrors = stE[0], setOpenErrors = stE[1];
     var stM = React.useState(null); var modal = stM[0], setModal = stM[1];
     var stCM = React.useState(false); var showClassMgmt = stCM[0], setShowClassMgmt = stCM[1];
+    var stTop = React.useState(54); var alertTop = stTop[0], setAlertTop = stTop[1];
+    React.useEffect(function() {
+      function measure() {
+        var h = document.querySelector('.apex-header');
+        if (h) setAlertTop(h.getBoundingClientRect().bottom + 8);
+      }
+      measure();
+      window.addEventListener('resize', measure);
+      var hEl = document.querySelector('.apex-header');
+      var mo = null;
+      if (hEl && window.MutationObserver) {
+        mo = new MutationObserver(measure);
+        mo.observe(hEl, { childList: true, subtree: true, attributes: true });
+      }
+      var iv = setInterval(measure, 1000);
+      return function() {
+        window.removeEventListener('resize', measure);
+        if (mo) mo.disconnect();
+        clearInterval(iv);
+      };
+    }, []);
     React.useEffect(function() {
       function checkAuth() {
         try {
@@ -1054,7 +1075,7 @@ body.apex-light {
     if (!isAdminStaff) return null;
     var dupCount = dupGroups.length, errCount = openErrors.length;
     return React.createElement(React.Fragment, null,
-      React.createElement("div", { style: { position: "fixed", top: 54, right: 8, zIndex: 60, display: "flex", flexDirection: "column", gap: 6, fontFamily: FONT } },
+      React.createElement("div", { style: { position: "fixed", top: alertTop, right: 8, zIndex: 60, display: "flex", flexDirection: "column", gap: 6, fontFamily: FONT } },
         dupCount > 0 && React.createElement("button", { onClick: function() { setModal("dup"); }, style: { background: "#EF444422", border: "1px solid #EF444488", color: "#FCA5A5", borderRadius: 10, padding: "6px 10px", fontSize: 12, fontWeight: 700, cursor: "pointer" } }, "⚠️ พบเบอร์โทรศัพท์ซ้ำในระบบ (" + dupCount + " รายการ)"),
         errCount > 0 && React.createElement("button", { onClick: function() { setModal("err"); }, style: { background: "#F9731622", border: "1px solid #F9731688", color: "#FDBA74", borderRadius: 10, padding: "6px 10px", fontSize: 12, fontWeight: 700, cursor: "pointer" } }, "🐞 ปัญหาระบบ (" + errCount + ")")
       ),
@@ -1091,7 +1112,7 @@ body.apex-light {
   }
 
   const SUPABASE_MIGRATED_ACTIONS = new Set([
-    "saveGymLocation", "saveSystemSettings", "saveSessionOverride", "updateMemberAvatar", "updateAutoSlotClaim", "getInstructorMonthlySummary", "uploadImage", "uploadMemberPhoto",
+    "saveGymLocation", "saveSystemSettings", "saveSessionOverride", "updateMemberAvatar", "updateAutoSlotClaim", "getInstructorMonthlySummary", "uploadImage", "uploadMemberPhoto", "submitGuestBooking",
     "loginPassword", "changeMemberPassword", "book", "cancel", "joinWaitlist", "cancelWaitlist",
     "checkin", "markAttendance", "adminAddGuest", "rescheduleGuestBooking", "confirmGuestPayment",
     "getAttendanceHistory", "saveDailyClassSummary", "evaluateNoShows", "getHotClassesReport"
@@ -1143,7 +1164,7 @@ body.apex-light {
     const classes = (classesR.data || []).map(function(c) {
       return { id: c.id, name: c.name, instructor: c.instructor || "", time: c.default_time,
         duration: c.duration_min, capacity: c.default_capacity, waitlistCap: c.waitlist_cap,
-        days: c.day_of_week, color: c.color || "", icon: c.icon || "", popular: !!c.popular, active: c.is_active !== false };
+        days: [c.day_of_week], color: c.color || "", icon: c.icon || "", popular: !!c.popular, active: c.is_active !== false };
     });
     const classMap = {};
     classes.forEach(function(c) { classMap[c.id] = c; });
@@ -1213,6 +1234,33 @@ body.apex-light {
         const r = await sbClient.rpc("rpc_update_member_avatar", { p_member_id: data.memberId, p_avatar_url: pub.data.publicUrl });
         if (r.error || (r.data && r.data.ok === false)) return { ok: false, error: (r.data && r.data.error) || "อัปโหลดรูปไม่สำเร็จ" };
         return { ok: true, photoUrl: pub.data.publicUrl };
+      }
+      if (action === "submitGuestBooking") {
+        const gName = (data.name || "").trim();
+        const gPhone = (data.phone || "").trim();
+        const gSessionId = data.sessionId;
+        if (!gSessionId) return { ok: false, error: "ไม่พบคลาสที่เลือก" };
+        if (!gName) return { ok: false, error: "กรุณากรอกชื่อ" };
+        if (!gPhone) return { ok: false, error: "กรุณากรอกเบอร์โทร" };
+        const slipB64 = data.slipBase64;
+        if (!slipB64) return { ok: false, error: "กรุณาอัปโหลดสลิปโอนเงิน" };
+        const sm = /^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/.exec(slipB64 || "");
+        if (!sm) return { ok: false, error: "รูปสลิปไม่ถูกต้อง" };
+        const smime = sm[1], sraw = atob(sm[2]);
+        const sarr = new Uint8Array(sraw.length);
+        for (let si = 0; si < sraw.length; si++) sarr[si] = sraw.charCodeAt(si);
+        const spath = "slips/" + gSessionId + "_" + Date.now() + ".jpg";
+        const sup = await sbClient.storage.from("apex-media").upload(spath, sarr, { contentType: smime, upsert: true });
+        if (sup.error) return { ok: false, error: sup.error.message || "อัปโหลดสลิปไม่สำเร็จ" };
+        const spub = sbClient.storage.from("apex-media").getPublicUrl(spath);
+        const sr = await sbClient.rpc("rpc_submit_guest_booking", {
+          p_session_id: gSessionId, p_name: gName, p_phone: gPhone,
+          p_slip_url: spub.data.publicUrl, p_amount: data.amount != null ? data.amount : null
+        });
+        if (sr.error) return { ok: false, error: sr.error.message || "จองไม่สำเร็จ" };
+        const sd = sr.data;
+        if (sd && sd.ok === false) return { ok: false, error: sd.error || "จองไม่สำเร็จ" };
+        return { ok: true, guestId: sd && sd.guestId };
       }
       if (action === "loginPassword") {
         const phone = normalizePhone(data.phone);
@@ -4360,7 +4408,7 @@ function GuestBookingFlow({ sessions, settings, onSubmit, onClose, showToast }) 
     if (!name.trim() || !phone.trim()) { showToast("\u0E01\u0E23\u0E2D\u0E01\u0E0A\u0E37\u0E48\u0E2D\u0E41\u0E25\u0E30\u0E40\u0E1A\u0E2D\u0E23\u0E4C\u0E42\u0E17\u0E23\u0E43\u0E2B\u0E49\u0E04\u0E23\u0E1A", "err"); return; }
     if (!slip) { showToast("\u0E01\u0E23\u0E38\u0E13\u0E32\u0E2D\u0E31\u0E1B\u0E42\u0E2B\u0E25\u0E14\u0E2A\u0E25\u0E34\u0E1B\u0E42\u0E2D\u0E19\u0E40\u0E07\u0E34\u0E19", "err"); return; }
     setSubmitting(true);
-    const res = await onSubmit({ name: name.trim(), phone: phone.trim(), sessionId: selId, slipBase64: slip });
+    const res = await onSubmit({ name: name.trim(), phone: phone.trim(), sessionId: selId, slipBase64: slip, amount: settings.guestPrice });
     setSubmitting(false);
     if (res.ok) setStep("done");
     else showToast(res.error || "\u0E40\u0E01\u0E34\u0E14\u0E02\u0E49\u0E2D\u0E1C\u0E34\u0E14\u0E1E\u0E25\u0E32\u0E14 \u0E25\u0E2D\u0E07\u0E43\u0E2B\u0E21\u0E48\u0E2D\u0E35\u0E01\u0E04\u0E23\u0E31\u0E49\u0E07", "err");
