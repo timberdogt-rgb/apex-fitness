@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+—<!DOCTYPE html>
 <html lang="th">
 <head>
   <meta charset="UTF-8"/>
@@ -4137,7 +4137,7 @@ const { useState } = React;
       /* @__PURE__ */ React.createElement("div", { style:{fontWeight:700,fontSize:14,color:C.text,marginBottom:14} }, "\u{1F4C8} Fill Rate ต่อคลาส"),
       classes.map(cl=>{
         const sl=Object.values(sessions).filter(s=>s.cid===cl.id);
-        const bk=sl.reduce((n,s)=>n+s.bk.length,0), cap=sl.reduce((n,s)=>n+s.cap,0);
+        const bk=sl.reduce((n,s)=>n+s.bk.length,0), cap=sl.reduce((n,s)=>n+(s.cap||0),0);
         const pct=cap>0?Math.round(bk/cap*100):0;
         return /* @__PURE__ */ React.createElement("div",{key:cl.id,style:{marginBottom:14}},
           /* @__PURE__ */ React.createElement("div",{style:{display:"flex",justifyContent:"space-between",marginBottom:4}},
