@@ -2604,27 +2604,51 @@ function ScheduleView({ sessions, member, settings, onBook, onWaitlist, onCancel
   }), modal && /* @__PURE__ */ React.createElement(Overlay, { onClose: () => { if (!submitting) setModal(null); } }, modal.kind === "book" && /* @__PURE__ */ React.createElement("div", { style: { textAlign: "center" } }, /* @__PURE__ */ React.createElement("div", { style: { fontSize: 52, marginBottom: 8 } }, modal.ico), /* @__PURE__ */ React.createElement("div", { style: { color: C.text, fontWeight: 800, fontSize: 18, marginBottom: 4 } }, _t("confirmBookTitle")), /* @__PURE__ */ React.createElement("div", { style: { color: modal.col, fontWeight: 700, marginBottom: 16 } }, modal.name), member.membershipType === "per_session" && /* @__PURE__ */ React.createElement("div", { style: { background: C.aM, border: `1px solid ${C.amber}`, borderRadius: 10, padding: "10px 14px", marginBottom: 14, color: C.amber, fontSize: 13 } }, "\u{1F39F}\uFE0F \u0E43\u0E0A\u0E49 1 \u0E40\u0E04\u0E23\u0E14\u0E34\u0E15 (\u0E40\u0E2B\u0E25\u0E37\u0E2D ", (member.sessionsLeft || 0) - 1, " \u0E04\u0E23\u0E31\u0E49\u0E07)"), /* @__PURE__ */ React.createElement("div", { style: { background: C.bg, borderRadius: 10, padding: "10px 14px", marginBottom: 20, fontSize: 12, color: C.muted, lineHeight: 1.7 } }, "\u{1F4CC} 1 \u0E04\u0E19 1 \u0E2A\u0E34\u0E17\u0E18\u0E34\u0E4C\u0E15\u0E48\u0E2D\u0E04\u0E25\u0E32\u0E2A", /* @__PURE__ */ React.createElement("br", null), "\u23F0 \u0E40\u0E0A\u0E47\u0E04\u0E2D\u0E34\u0E19\u0E01\u0E48\u0E2D\u0E19 ", settings.checkinBeforeMin, " \u0E19\u0E32\u0E17\u0E35 \u0E2A\u0E32\u0E22\u0E44\u0E21\u0E48\u0E40\u0E01\u0E34\u0E19 ", settings.checkinAfterMin, " " + _t("wlConfirmMin")), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 10 } }, /* @__PURE__ */ React.createElement(Btn, { label: _t("cancelBtn"), bg: C.surf, col: C.muted, disabled: submitting, onClick: () => { if (!submitting) setModal(null); }, full: true }), /* @__PURE__ */ React.createElement(Btn, { label: submitting ? "กำลังบันทึก..." : _t("confirmBtn"), bg: modal.col, disabled: submitting, onClick: async () => {
     if (submitting) return;
     setSubmitting(true);
-    const res = await onBook(modal.sid);
-    setSubmitting(false);
-    if (res && res.ok !== false) setModal(null);
+    try {
+      const res = await onBook(modal.sid);
+      if (res && res.ok !== false) setModal(null);
+    } catch (e) {
+      console.error("booking modal error", e);
+      showToast("เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง", "err");
+    } finally {
+      setSubmitting(false);
+    }
   }, full: true }))), modal.kind === "waitlist" && /* @__PURE__ */ React.createElement("div", { style: { textAlign: "center" } }, /* @__PURE__ */ React.createElement("div", { style: { fontSize: 52, marginBottom: 8 } }, "\u{1FA91}"), /* @__PURE__ */ React.createElement("div", { style: { color: C.text, fontWeight: 800, fontSize: 18, marginBottom: 4 } }, _t("wlTitle")), /* @__PURE__ */ React.createElement("div", { style: { color: C.amber, fontWeight: 700, marginBottom: 8 } }, modal.name), /* @__PURE__ */ React.createElement("div", { style: { background: C.aM, border: `1px solid ${C.amber}`, borderRadius: 10, padding: 14, marginBottom: 16, fontSize: 13, color: C.amber, lineHeight: 1.6 } }, _t("rankIn") + " ", /* @__PURE__ */ React.createElement("strong", { style: { fontSize: 20 } }, modal.pos), " " + _t("inWL"), /* @__PURE__ */ React.createElement("br", null), _t("wlInfo")), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 10 } }, /* @__PURE__ */ React.createElement(Btn, { label: _t("cancelBtn"), bg: C.surf, col: C.muted, disabled: submitting, onClick: () => { if (!submitting) setModal(null); }, full: true }), /* @__PURE__ */ React.createElement(Btn, { label: submitting ? "กำลังบันทึก..." : _t("confirmWLBtn"), bg: C.amber, disabled: submitting, onClick: async () => {
     if (submitting) return;
     setSubmitting(true);
-    const res = await onWaitlist(modal.sid);
-    setSubmitting(false);
-    if (res && res.ok !== false) setModal(null);
+    try {
+      const res = await onWaitlist(modal.sid);
+      if (res && res.ok !== false) setModal(null);
+    } catch (e) {
+      console.error("booking modal error", e);
+      showToast("เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง", "err");
+    } finally {
+      setSubmitting(false);
+    }
   }, full: true }))), modal.kind === "cancelMain" && /* @__PURE__ */ React.createElement("div", { style: { textAlign: "center" } }, /* @__PURE__ */ React.createElement("div", { style: { fontSize: 40, marginBottom: 10 } }, "\u{1F5D1}\uFE0F"), /* @__PURE__ */ React.createElement("div", { style: { color: C.text, fontWeight: 800, fontSize: 18, marginBottom: 8 } }, _t("cancelConfirmTitle")), /* @__PURE__ */ React.createElement("div", { style: { color: C.muted, fontSize: 14, marginBottom: 8 } }, modal.name), modal.lateCancel && /* @__PURE__ */ React.createElement("div", { style: { background: C.rM, border: `1px solid ${C.red}`, borderRadius: 10, padding: "10px 14px", marginBottom: 14, fontSize: 12, color: C.red, lineHeight: 1.6, textAlign: "left" } }, _t("lateWarn") + " ", /* @__PURE__ */ React.createElement("strong", null, _t("noShow")), " \u0E40\u0E1E\u0E23\u0E32\u0E30\u0E40\u0E2B\u0E25\u0E37\u0E2D\u0E40\u0E27\u0E25\u0E32\u0E19\u0E49\u0E2D\u0E22\u0E01\u0E27\u0E48\u0E32 ", settings.cancelHoursLimit, " \u0E0A\u0E21. \u0E01\u0E48\u0E2D\u0E19\u0E04\u0E25\u0E32\u0E2A\u0E40\u0E23\u0E34\u0E48\u0E21"), modal.hasWL && /* @__PURE__ */ React.createElement("div", { style: { background: C.bM, borderRadius: 10, padding: "10px 14px", marginBottom: 14, fontSize: 12, color: C.blue } }, _t("wlNotify")), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 10 } }, /* @__PURE__ */ React.createElement(Btn, { label: _t("keepBooking"), bg: C.surf, col: C.muted, disabled: submitting, onClick: () => { if (!submitting) setModal(null); }, full: true }), /* @__PURE__ */ React.createElement(Btn, { label: submitting ? "กำลังยกเลิก..." : _t("confirmCancelBtn"), bg: C.red, disabled: submitting, onClick: async () => {
     if (submitting) return;
     setSubmitting(true);
-    const res = await onCancel(modal.sid);
-    setSubmitting(false);
-    if (res && res.ok !== false) setModal(null);
+    try {
+      const res = await onCancel(modal.sid);
+      if (res && res.ok !== false) setModal(null);
+    } catch (e) {
+      console.error("booking modal error", e);
+      showToast("เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง", "err");
+    } finally {
+      setSubmitting(false);
+    }
   }, full: true }))), modal.kind === "cancelWL" && /* @__PURE__ */ React.createElement("div", { style: { textAlign: "center" } }, /* @__PURE__ */ React.createElement("div", { style: { fontSize: 40, marginBottom: 10 } }, "\u{1F5D1}\uFE0F"), /* @__PURE__ */ React.createElement("div", { style: { color: C.text, fontWeight: 800, fontSize: 17, marginBottom: 8 } }, _t("leaveWLTitle")), /* @__PURE__ */ React.createElement("div", { style: { color: C.muted, fontSize: 14, marginBottom: 20 } }, modal.name), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 10 } }, /* @__PURE__ */ React.createElement(Btn, { label: _t("noBtn"), bg: C.surf, col: C.muted, disabled: submitting, onClick: () => { if (!submitting) setModal(null); }, full: true }), /* @__PURE__ */ React.createElement(Btn, { label: submitting ? "กำลังยกเลิก..." : _t("yesBtn"), bg: C.amber, disabled: submitting, onClick: async () => {
     if (submitting) return;
     setSubmitting(true);
-    const res = await onCancelWL(modal.sid);
-    setSubmitting(false);
-    if (res && res.ok !== false) setModal(null);
+    try {
+      const res = await onCancelWL(modal.sid);
+      if (res && res.ok !== false) setModal(null);
+    } catch (e) {
+      console.error("booking modal error", e);
+      showToast("เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง", "err");
+    } finally {
+      setSubmitting(false);
+    }
   }, full: true }))), modal.kind === "fullContact" && /* @__PURE__ */ React.createElement(FullContactCard, { settings, session: modal.session, onClose: () => setModal(null) }), modal.kind === "membership" && /* @__PURE__ */ React.createElement(MembershipAlert, { member, settings, onClose: () => setModal(null) })));
 }
 function WLPendingBanner({ pendingWL, onConfirmWL, onDeclineWL }) {
@@ -2697,9 +2721,15 @@ function MyBookingsView({ sessions, member, settings, onCancel, onCancelWL, onCh
     mainBk.length > 0 && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { style: { color: C.muted, fontSize: 11, fontWeight: 700, letterSpacing: 2, marginBottom: 10 } }, "\u0E01\u0E32\u0E23\u0E08\u0E2D\u0E07\u0E2B\u0E25\u0E31\u0E01 (", mainBk.length, ")"), mainBk.map((s) => /* @__PURE__ */ React.createElement(Card, { key: s.id, s, type: "main" }))), wlBk.length > 0 && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { style: { color: C.amber, fontSize: 11, fontWeight: 700, letterSpacing: 2, marginBottom: 10, marginTop: 16 } }, "\u0E17\u0E35\u0E48\u0E19\u0E31\u0E48\u0E07\u0E2A\u0E33\u0E23\u0E2D\u0E07 (", wlBk.length, ")"), wlBk.map((s) => /* @__PURE__ */ React.createElement(Card, { key: s.id, s, type: "wl" }))), modal && /* @__PURE__ */ React.createElement(Overlay, { onClose: () => { if (!submitting) setModal(null); } }, /* @__PURE__ */ React.createElement("div", { style: { textAlign: "center" } }, /* @__PURE__ */ React.createElement("div", { style: { fontSize: 40, marginBottom: 10 } }, "\u{1F5D1}\uFE0F"), /* @__PURE__ */ React.createElement("div", { style: { color: C.text, fontWeight: 800, fontSize: 17, marginBottom: 8 } }, modal.kind === "cancelWL" ? _t("leaveWLTitle") : _t("cancelConfirmTitle")), /* @__PURE__ */ React.createElement("div", { style: { color: C.muted, marginBottom: modal.hasWL ? 12 : 20 } }, modal.name), modal.lateCancel && /* @__PURE__ */ React.createElement("div", { style: { background: C.rM, border: `1px solid ${C.red}`, borderRadius: 10, padding: "10px 14px", marginBottom: 14, fontSize: 12, color: C.red, lineHeight: 1.6, textAlign: "left" } }, "\u26A0\uFE0F \u0E22\u0E01\u0E40\u0E25\u0E34\u0E01\u0E15\u0E2D\u0E19\u0E19\u0E35\u0E49\u0E08\u0E30\u0E19\u0E31\u0E1A\u0E40\u0E1B\u0E47\u0E19 No-show \u0E40\u0E1E\u0E23\u0E32\u0E30\u0E40\u0E2B\u0E25\u0E37\u0E2D\u0E40\u0E27\u0E25\u0E32\u0E19\u0E49\u0E2D\u0E22\u0E01\u0E27\u0E48\u0E32 ", settings.cancelHoursLimit, " \u0E0A\u0E21."), modal.hasWL && /* @__PURE__ */ React.createElement("div", { style: { background: C.bM, borderRadius: 10, padding: "10px 14px", marginBottom: 20, fontSize: 12, color: C.blue } }, "\u{1F4A1} \u0E21\u0E35\u0E04\u0E19\u0E23\u0E2D\u0E2A\u0E33\u0E23\u0E2D\u0E07 \u2014 \u0E23\u0E30\u0E1A\u0E1A\u0E08\u0E30\u0E41\u0E08\u0E49\u0E07\u0E41\u0E25\u0E30\u0E40\u0E25\u0E37\u0E48\u0E2D\u0E19\u0E17\u0E35\u0E48\u0E19\u0E31\u0E48\u0E07\u0E2D\u0E31\u0E15\u0E42\u0E19\u0E21\u0E31\u0E15\u0E34"), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 10 } }, /* @__PURE__ */ React.createElement(Btn, { label: _t("noBtn"), bg: C.surf, col: C.muted, disabled: submitting, onClick: () => { if (!submitting) setModal(null); }, full: true }), /* @__PURE__ */ React.createElement(Btn, { label: submitting ? "\u0E01\u0E33\u0E25\u0E31\u0E07\u0E22\u0E01\u0E40\u0E25\u0E34\u0E01..." : "\u0E22\u0E37\u0E19\u0E22\u0E31\u0E19", bg: modal.kind === "cancelWL" ? C.amber : C.red, disabled: submitting, onClick: async () => {
     if (submitting) return;
     setSubmitting(true);
-    const res = modal.kind === "cancelWL" ? await onCancelWL(modal.sid) : await onCancel(modal.sid);
-    setSubmitting(false);
-    if (res && res.ok !== false) setModal(null);
+    try {
+      const res = modal.kind === "cancelWL" ? await onCancelWL(modal.sid) : await onCancel(modal.sid);
+      if (res && res.ok !== false) setModal(null);
+    } catch (e) {
+      console.error("booking modal error", e);
+      showToast("เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง", "err");
+    } finally {
+      setSubmitting(false);
+    }
   }, full: true })))));
 }
 function CheckinView({ sessions, member, settings, onCheckin, showToast }) {
@@ -4784,6 +4814,7 @@ function App() {
     });
   }, [save]);
   const book = useCallback(async (sid) => {
+    try {
     const m = members.find((x) => x.id === (auth == null ? void 0 : auth.mid));
     if (!m) return { ok:false, error:"\u0E44\u0E21\u0E48\u0E1E\u0E1A\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E2A\u0E21\u0E32\u0E0A\u0E34\u0E01 \u0E01\u0E23\u0E38\u0E13\u0E32\u0E40\u0E02\u0E49\u0E32\u0E2A\u0E39\u0E48\u0E23\u0E30\u0E1A\u0E1A\u0E43\u0E2B\u0E21\u0E48" };
     const s = sessions[sid];
@@ -4820,10 +4851,16 @@ function App() {
     setSessions(ns);
     save("apex_sessions", ns);
     markPendingWrite(sid);
-    showToast(`\u2705 \u0E08\u0E2D\u0E07 ${s.name} \u0E2A\u0E33\u0E40\u0E23\u0E47\u0E08!`, "ok");
+    showToast("🎉 จองคลาสสำเร็จเรียบร้อย", "ok");
     return res;
+      } catch (e) {
+      console.error("book error", e);
+      showToast("เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง", "err");
+      return { ok: false, error: "เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง" };
+    }
   }, [auth, members, sessions, showToast, save, postAction]);
   const joinWL = useCallback(async (sid) => {
+    try {
     const m = members.find((x) => x.id === (auth == null ? void 0 : auth.mid));
     if (!m) return { ok:false, error:"\u0E44\u0E21\u0E48\u0E1E\u0E1A\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E2A\u0E21\u0E32\u0E0A\u0E34\u0E01 \u0E01\u0E23\u0E38\u0E13\u0E32\u0E40\u0E02\u0E49\u0E32\u0E2A\u0E39\u0E48\u0E23\u0E30\u0E1A\u0E1A\u0E43\u0E2B\u0E21\u0E48" };
     const s = sessions[sid];
@@ -4853,8 +4890,14 @@ function App() {
     markPendingWrite(sid);
     const res = await postAction("joinWaitlist", { sessionId: sid, memberId: m.id });
     if (!res.ok && !res._offline) showToast(res.error || "\u0E1A\u0E31\u0E19\u0E17\u0E36\u0E01\u0E44\u0E21\u0E48\u0E2A\u0E33\u0E40\u0E23\u0E47\u0E08 \u0E25\u0E2D\u0E07\u0E23\u0E35\u0E40\u0E1F\u0E23\u0E0A\u0E2B\u0E19\u0E49\u0E32", "err");
+      } catch (e) {
+      console.error("joinWL error", e);
+      showToast("เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง", "err");
+      return { ok: false, error: "เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง" };
+    }
   }, [auth, members, sessions, showToast, save, pushNotif, postAction]);
   const cancel = useCallback(async (sid) => {
+    try {
     const mid = auth == null ? void 0 : auth.mid;
     const s = sessions[sid];
     if (!s) return { ok:false, error:"ไม่พบข้อมูลคลาสนี้ กรุณารีเฟรชหน้า" };
@@ -4892,8 +4935,14 @@ function App() {
       });
     }
     return res;
+      } catch (e) {
+      console.error("cancel error", e);
+      showToast("เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง", "err");
+      return { ok: false, error: "เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง" };
+    }
   }, [auth, sessions, members, showToast, save, pushNotif, postAction]);
   const cancelWL = useCallback(async (sid) => {
+    try {
     const mid = auth == null ? void 0 : auth.mid;
     const s = sessions[sid];
     if (!s) return { ok:false, error:"\u0E44\u0E21\u0E48\u0E1E\u0E1A\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E04\u0E25\u0E32\u0E2A\u0E19\u0E35\u0E49 \u0E01\u0E23\u0E38\u0E13\u0E32\u0E23\u0E35\u0E40\u0E1F\u0E23\u0E0A\u0E2B\u0E19\u0E49\u0E32" };
@@ -4907,7 +4956,12 @@ function App() {
     save("apex_sessions", ns);
     showToast("\u0E2D\u0E2D\u0E01\u0E08\u0E32\u0E01\u0E23\u0E32\u0E22\u0E01\u0E32\u0E23\u0E2A\u0E33\u0E23\u0E2D\u0E07\u0E41\u0E25\u0E49\u0E27", "warn");
     markPendingWrite(sid);
-    return res;
+      return res;
+    } catch (e) {
+      console.error("cancelWL error", e);
+      showToast("เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง", "err");
+      return { ok: false, error: "เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง" };
+    }
   }, [auth, sessions, showToast, save, postAction]);
   const checkin = useCallback(async (sid) => {
     const mid = auth == null ? void 0 : auth.mid;
