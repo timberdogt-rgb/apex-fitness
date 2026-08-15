@@ -2239,12 +2239,17 @@ function LoginScreen({ onLogin, deviceId, members, onMembersUpdate, onGuestBooki
     if (!phone || !password) { setPwErr("กรุณากรอกเบอร์โทรและรหัสผ่าน"); return; }
     setPwLoading(true);
     try {
-      const r = await fetch(APPS_SCRIPT_URL, {
-        method: "POST",
-        body: JSON.stringify({ action: "loginPassword", phone, password }),
-        signal: AbortSignal.timeout(15000),
-      });
-      const d = await r.json();
+      let d;
+      if (sbClient && SUPABASE_MIGRATED_ACTIONS.has("loginPassword")) {
+        d = await supabaseAction("loginPassword", { phone, password });
+      } else {
+        const r = await fetch(APPS_SCRIPT_URL, {
+          method: "POST",
+          body: JSON.stringify({ action: "loginPassword", phone, password }),
+          signal: AbortSignal.timeout(15000),
+        });
+        d = await r.json();
+      }
       if (!d.ok) { setPwErr(d.error || "เข้าสู่ระบบไม่สำเร็จ"); setPwLoading(false); return; }
       if (d.mustChangePassword) {
         setPwMember(d.member);
@@ -2264,12 +2269,17 @@ function LoginScreen({ onLogin, deviceId, members, onMembersUpdate, onGuestBooki
     if (newPass1 !== newPass2) { setPwErr("รหัสผ่านไม่ตรงกัน"); return; }
     setPwLoading(true);
     try {
-      const r = await fetch(APPS_SCRIPT_URL, {
-        method: "POST",
-        body: JSON.stringify({ action: "changeMemberPassword", id: pwMember.id, newPassword: newPass1 }),
-        signal: AbortSignal.timeout(15000),
-      });
-      const d = await r.json();
+      let d;
+      if (sbClient && SUPABASE_MIGRATED_ACTIONS.has("changeMemberPassword")) {
+        d = await supabaseAction("changeMemberPassword", { id: pwMember.id, newPassword: newPass1 });
+      } else {
+        const r = await fetch(APPS_SCRIPT_URL, {
+          method: "POST",
+          body: JSON.stringify({ action: "changeMemberPassword", id: pwMember.id, newPassword: newPass1 }),
+          signal: AbortSignal.timeout(15000),
+        });
+        d = await r.json();
+      }
       if (!d.ok) { setPwErr(d.error || "ตั้งรหัสผ่านไม่สำเร็จ"); setPwLoading(false); return; }
       onLogin({ type: "user", mid: pwMember.id });
     } catch (e) {
@@ -4816,9 +4826,9 @@ function App() {
   const book = useCallback(async (sid) => {
     try {
     const m = members.find((x) => x.id === (auth == null ? void 0 : auth.mid));
-    if (!m) return { ok:false, error:"\u0E44\u0E21\u0E48\u0E1E\u0E1A\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E2A\u0E21\u0E32\u0E0A\u0E34\u0E01 \u0E01\u0E23\u0E38\u0E13\u0E32\u0E40\u0E02\u0E49\u0E32\u0E2A\u0E39\u0E48\u0E23\u0E30\u0E1A\u0E1A\u0E43\u0E2B\u0E21\u0E48" };
+    if (!m) { showToast("\u0E44\u0E21\u0E48\u0E1E\u0E1A\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E2A\u0E21\u0E32\u0E0A\u0E34\u0E01 \u0E01\u0E23\u0E38\u0E13\u0E32\u0E40\u0E02\u0E49\u0E32\u0E2A\u0E39\u0E48\u0E23\u0E30\u0E1A\u0E1A\u0E43\u0E2B\u0E21\u0E48", "err"); return { ok: false, error: "\u0E44\u0E21\u0E48\u0E1E\u0E1A\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E2A\u0E21\u0E32\u0E0A\u0E34\u0E01 \u0E01\u0E23\u0E38\u0E13\u0E32\u0E40\u0E02\u0E49\u0E32\u0E2A\u0E39\u0E48\u0E23\u0E30\u0E1A\u0E1A\u0E43\u0E2B\u0E21\u0E48" }; }
     const s = sessions[sid];
-    if (!s) return { ok:false, error:"\u0E44\u0E21\u0E48\u0E1E\u0E1A\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E04\u0E25\u0E32\u0E2A\u0E19\u0E35\u0E49 \u0E01\u0E23\u0E38\u0E13\u0E32\u0E23\u0E35\u0E40\u0E1F\u0E23\u0E0A\u0E2B\u0E19\u0E49\u0E32" };
+    if (!s) { showToast("\u0E44\u0E21\u0E48\u0E1E\u0E1A\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E04\u0E25\u0E32\u0E2A\u0E19\u0E35\u0E49 \u0E01\u0E23\u0E38\u0E13\u0E32\u0E23\u0E35\u0E40\u0E1F\u0E23\u0E0A\u0E2B\u0E19\u0E49\u0E32", "err"); return { ok: false, error: "\u0E44\u0E21\u0E48\u0E1E\u0E1A\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E04\u0E25\u0E32\u0E2A\u0E19\u0E35\u0E49 \u0E01\u0E23\u0E38\u0E13\u0E32\u0E23\u0E35\u0E40\u0E1F\u0E23\u0E0A\u0E2B\u0E19\u0E49\u0E32" }; }
     if (s.bk.includes(m.id)) {
       showToast("\u0E08\u0E2D\u0E07\u0E41\u0E25\u0E49\u0E27", "warn");
       return { ok:false, error:"\u0E08\u0E2D\u0E07\u0E41\u0E25\u0E49\u0E27" };
@@ -4862,9 +4872,9 @@ function App() {
   const joinWL = useCallback(async (sid) => {
     try {
     const m = members.find((x) => x.id === (auth == null ? void 0 : auth.mid));
-    if (!m) return { ok:false, error:"\u0E44\u0E21\u0E48\u0E1E\u0E1A\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E2A\u0E21\u0E32\u0E0A\u0E34\u0E01 \u0E01\u0E23\u0E38\u0E13\u0E32\u0E40\u0E02\u0E49\u0E32\u0E2A\u0E39\u0E48\u0E23\u0E30\u0E1A\u0E1A\u0E43\u0E2B\u0E21\u0E48" };
+    if (!m) { showToast("\u0E44\u0E21\u0E48\u0E1E\u0E1A\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E2A\u0E21\u0E32\u0E0A\u0E34\u0E01 \u0E01\u0E23\u0E38\u0E13\u0E32\u0E40\u0E02\u0E49\u0E32\u0E2A\u0E39\u0E48\u0E23\u0E30\u0E1A\u0E1A\u0E43\u0E2B\u0E21\u0E48", "err"); return { ok: false, error: "\u0E44\u0E21\u0E48\u0E1E\u0E1A\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E2A\u0E21\u0E32\u0E0A\u0E34\u0E01 \u0E01\u0E23\u0E38\u0E13\u0E32\u0E40\u0E02\u0E49\u0E32\u0E2A\u0E39\u0E48\u0E23\u0E30\u0E1A\u0E1A\u0E43\u0E2B\u0E21\u0E48" }; }
     const s = sessions[sid];
-    if (!s) return { ok:false, error:"\u0E44\u0E21\u0E48\u0E1E\u0E1A\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E04\u0E25\u0E32\u0E2A\u0E19\u0E35\u0E49 \u0E01\u0E23\u0E38\u0E13\u0E32\u0E23\u0E35\u0E40\u0E1F\u0E23\u0E0A\u0E2B\u0E19\u0E49\u0E32" };
+    if (!s) { showToast("\u0E44\u0E21\u0E48\u0E1E\u0E1A\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E04\u0E25\u0E32\u0E2A\u0E19\u0E35\u0E49 \u0E01\u0E23\u0E38\u0E13\u0E32\u0E23\u0E35\u0E40\u0E1F\u0E23\u0E0A\u0E2B\u0E19\u0E49\u0E32", "err"); return { ok: false, error: "\u0E44\u0E21\u0E48\u0E1E\u0E1A\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E04\u0E25\u0E32\u0E2A\u0E19\u0E35\u0E49 \u0E01\u0E23\u0E38\u0E13\u0E32\u0E23\u0E35\u0E40\u0E1F\u0E23\u0E0A\u0E2B\u0E19\u0E49\u0E32" }; }
     if (s.wl.includes(m.id)) {
       showToast("\u0E2D\u0E22\u0E39\u0E48\u0E43\u0E19\u0E23\u0E32\u0E22\u0E01\u0E32\u0E23\u0E2A\u0E33\u0E23\u0E2D\u0E07\u0E41\u0E25\u0E49\u0E27", "warn");
       return { ok:false, error:"\u0E2D\u0E22\u0E39\u0E48\u0E43\u0E19\u0E23\u0E32\u0E22\u0E01\u0E32\u0E23\u0E2A\u0E33\u0E23\u0E2D\u0E07\u0E41\u0E25\u0E49\u0E27" };
@@ -4900,7 +4910,7 @@ function App() {
     try {
     const mid = auth == null ? void 0 : auth.mid;
     const s = sessions[sid];
-    if (!s) return { ok:false, error:"ไม่พบข้อมูลคลาสนี้ กรุณารีเฟรชหน้า" };
+    if (!s) { showToast("ไม่พบข้อมูลคลาสนี้ กรุณารีเฟรชหน้า", "err"); return { ok: false, error: "ไม่พบข้อมูลคลาสนี้ กรุณารีเฟรชหน้า" }; }
     // [FIX 2026-08-09] Await server confirmation before touching local state/UI —
     // mirrors book()/joinWL(). Previously this cancelled optimistically and only
     // toasted the error afterward with no rollback, so a rejected cancel still
@@ -4945,7 +4955,7 @@ function App() {
     try {
     const mid = auth == null ? void 0 : auth.mid;
     const s = sessions[sid];
-    if (!s) return { ok:false, error:"\u0E44\u0E21\u0E48\u0E1E\u0E1A\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E04\u0E25\u0E32\u0E2A\u0E19\u0E35\u0E49 \u0E01\u0E23\u0E38\u0E13\u0E32\u0E23\u0E35\u0E40\u0E1F\u0E23\u0E0A\u0E2B\u0E19\u0E49\u0E32" };
+    if (!s) { showToast("\u0E44\u0E21\u0E48\u0E1E\u0E1A\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E04\u0E25\u0E32\u0E2A\u0E19\u0E35\u0E49 \u0E01\u0E23\u0E38\u0E13\u0E32\u0E23\u0E35\u0E40\u0E1F\u0E23\u0E0A\u0E2B\u0E19\u0E49\u0E32", "err"); return { ok: false, error: "\u0E44\u0E21\u0E48\u0E1E\u0E1A\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E04\u0E25\u0E32\u0E2A\u0E19\u0E35\u0E49 \u0E01\u0E23\u0E38\u0E13\u0E32\u0E23\u0E35\u0E40\u0E1F\u0E23\u0E0A\u0E2B\u0E19\u0E49\u0E32" }; }
     const res = await postAction("cancelWaitlist", { sessionId: sid, memberId: String(mid) });
     if (!res.ok) {
       showToast(res.error || "\u0E1A\u0E31\u0E19\u0E17\u0E36\u0E01\u0E44\u0E21\u0E48\u0E2A\u0E33\u0E40\u0E23\u0E47\u0E08", "err");
