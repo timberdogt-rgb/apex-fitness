@@ -1115,7 +1115,7 @@ body.apex-light {
     "saveGymLocation", "saveSystemSettings", "saveSessionOverride", "updateMemberAvatar", "updateAutoSlotClaim", "getInstructorMonthlySummary", "uploadImage", "uploadMemberPhoto", "submitGuestBooking",
     "loginPassword", "changeMemberPassword", "book", "cancel", "joinWaitlist", "cancelWaitlist",
     "checkin", "markAttendance", "adminAddGuest", "rescheduleGuestBooking", "confirmGuestPayment",
-    "getAttendanceHistory", "saveDailyClassSummary", "evaluateNoShows", "getHotClassesReport"
+    "getAttendanceHistory", "saveDailyClassSummary", "evaluateNoShows", "getHotClassesReport", "adminCancelGuest", "adminCancel"
   ]);
   async function fetchAllRows(table, applyFilter) {
     let all = [];
@@ -1283,7 +1283,7 @@ body.apex-light {
         if (r.error) return { ok: false, error: "จองไม่สำเร็จ ลองใหม่อีกครั้ง" };
         return r.data;
       }
-      if (action === "cancel" || action === "cancelWaitlist") {
+      if (action === "cancel" || action === "cancelWaitlist" || action === "adminCancel") {
         const r = await sbClient.rpc("rpc_cancel_booking", { p_session_id: data.sessionId, p_member_id: String(data.memberId) });
         if (r.error) return { ok: false, error: "ยกเลิกไม่สำเร็จ ลองรีเฟรชหน้า" };
         return r.data;
@@ -1350,6 +1350,11 @@ body.apex-light {
           p_note: data.note || null, p_type: data.bookingType || "walk_in"
         });
         if (r.error) return { ok: false, error: "เพิ่มไม่สำเร็จ" };
+        return r.data;
+      }
+      if (action === "adminCancelGuest") {
+        const r = await sbClient.rpc("rpc_cancel_guest_booking", { p_guest_id: String(data.guestId) });
+        if (r.error) return { ok: false, error: "ยกเลิกไม่สำเร็จ ลองรีเฟรชหน้า" };
         return r.data;
       }
       if (action === "rescheduleGuestBooking") {
@@ -3111,7 +3116,7 @@ function KioskView({ members, sessions, onKioskBook, onKioskCheckin, showToast }
     return /* @__PURE__ */ React.createElement("div", { key: s.id, style: { background: C.surf, borderRadius: 12, border: `1px solid ${C.border}`, padding: 14, marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 } }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("div", { style: { color: C.text, fontWeight: 700, fontSize: 14 } }, s.ico, " ", s.name), /* @__PURE__ */ React.createElement("div", { style: { color: C.muted, fontSize: 12, marginTop: 2 } }, s.t, " \xB7 ", s.ins)), att === "present" ? /* @__PURE__ */ React.createElement(Pill, { text: "\u2705 \u0E40\u0E0A\u0E47\u0E04\u0E2D\u0E34\u0E19\u0E41\u0E25\u0E49\u0E27", color: C.green, bg: C.gM }) : bk ? /* @__PURE__ */ React.createElement(Btn, { label: "\u0E40\u0E0A\u0E47\u0E04\u0E2D\u0E34\u0E19", bg: C.green, onClick: () => handleCheckin(s.id), disabled: busy, size: "sm" }) : full ? /* @__PURE__ */ React.createElement(Pill, { text: "\u0E40\u0E15\u0E47\u0E21", color: C.red, bg: C.rM }) : /* @__PURE__ */ React.createElement(Btn, { label: "\u0E08\u0E2D\u0E07+\u0E40\u0E0A\u0E47\u0E04\u0E2D\u0E34\u0E19", bg: C.orange, onClick: () => handleBook(s.id), disabled: busy, size: "sm" }));
   }), /* @__PURE__ */ React.createElement(Btn, { label: "\u2190 \u0E04\u0E19\u0E16\u0E31\u0E14\u0E44\u0E1B (\u0E25\u0E49\u0E32\u0E07\u0E04\u0E48\u0E32)", bg: C.surf, col: C.muted, onClick: reset, full: true }));
 }
-function AdminAttendance({ sessions, members, guestBookings, onMark, onPromoteWL, onAdminCancel, onAdminAddGuest, onRescheduleGuest, onSaveOverride, postAction, showToast }) {
+function AdminAttendance({ sessions, members, guestBookings, onMark, onPromoteWL, onAdminCancel, onAdminAddGuest, onRescheduleGuest, onSaveOverride, onAdminCancelGuest, postAction, showToast }) {
   const [day, setDay] = useState(0);
   const [detailMember, setDetailMember] = useState(null); // [BUG#3] click-to-detail
   const [rescheduleModal, setRescheduleModal] = useState(null); // { sessionId, name }
@@ -3122,6 +3127,9 @@ function AdminAttendance({ sessions, members, guestBookings, onMark, onPromoteWL
   const [newDateVal, setNewDateVal] = useState("");
   const [newTimeVal, setNewTimeVal] = useState("");
   const [rescheduling, setRescheduling] = useState(false);
+  const [guestCancelModal, setGuestCancelModal] = useState(null); // { guestId, guestName, className, sessionId }
+  const [guestCancelling, setGuestCancelling] = useState(false);
+  const [slipView, setSlipView] = useState(null);
   // ✅ Admin manual roster add (walk-in / non-member guest)
   const [manualAddModal, setManualAddModal] = useState(null); // { sessionId, sessionName }
   const [maName, setMaName] = useState("");
@@ -3330,6 +3338,20 @@ function AdminAttendance({ sessions, members, guestBookings, onMark, onPromoteWL
       )
     )
   ),
+  guestCancelModal && /* @__PURE__ */ React.createElement(Overlay, { onClose: () => setGuestCancelModal(null) },
+    /* @__PURE__ */ React.createElement("div", { style: { fontSize: 17, fontWeight: 800, color: C.text, marginBottom: 10, fontFamily: FONT } }, "ยืนยันการยกเลิกการจอง"),
+    /* @__PURE__ */ React.createElement("div", { style: { fontSize: 14, color: C.sub, marginBottom: 20, lineHeight: 1.6 } }, `ยืนยันการยกเลิกการจองของ ${guestCancelModal.guestName} ในคลาส ${guestCancelModal.className}?`),
+    /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 10 } },
+      /* @__PURE__ */ React.createElement(Btn, { label: "ยกเลิก", bg: C.surfUp, col: C.muted, onClick: () => setGuestCancelModal(null), full: true, disabled: guestCancelling }),
+      /* @__PURE__ */ React.createElement(Btn, { label: guestCancelling ? "..." : "ยืนยันยกเลิกการจอง", bg: C.red, col: "#fff", onClick: async () => {
+        setGuestCancelling(true);
+        const res = await onAdminCancelGuest(guestCancelModal.guestId, guestCancelModal.sessionId, guestCancelModal.guestName);
+        setGuestCancelling(false);
+        if (res && res.ok) setGuestCancelModal(null);
+      }, full: true, disabled: guestCancelling })
+    )
+  ),
+  slipView && /* @__PURE__ */ React.createElement(SlipPreviewModal, { guest: slipView, onClose: () => setSlipView(null) }),
   rescheduleGuestModal && /* @__PURE__ */ React.createElement(Overlay, { onClose: () => setRescheduleGuestModal(null) },
     /* @__PURE__ */ React.createElement("div", { style: { color: C.text } },
       /* @__PURE__ */ React.createElement("div", { style: { fontWeight: 800, fontSize: 17, marginBottom: 4 } }, "\uD83D\uDDD3\uFE0F \u0E40\u0E25\u0E37\u0E48\u0E2D\u0E19\u0E27\u0E31\u0E19/\u0E04\u0E25\u0E32\u0E2A"),
@@ -3423,7 +3445,7 @@ function AdminAttendance({ sessions, members, guestBookings, onMark, onPromoteWL
       if (g) return /* @__PURE__ */ React.createElement("div", { key: mid, style: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "9px 0", borderBottom: "1px solid " + C.border } },
         /* @__PURE__ */ React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 10 } },
           /* @__PURE__ */ React.createElement("div", { style: { width: 34, height: 34, borderRadius: "50%", background: gAtt === "present" ? C.gM : gAtt === "noshow" ? C.rM : C.blue + "22", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15 } }, gAtt === "present" ? "\u2705" : gAtt === "noshow" ? "\u274C" : "\uD83D\uDEB6"),
-          /* @__PURE__ */ React.createElement("div", null,
+          /* @__PURE__ */ React.createElement("div", { onClick: (e) => { e.stopPropagation(); if (g.slipUrl) { setSlipView(g); } else { showToast("ไม่มีรูปสลิปสำหรับรายการนี้", "err"); } }, style: { cursor: "pointer" } },
             /* @__PURE__ */ React.createElement("div", { style: { fontWeight: 700, fontSize: 14, color: C.text } }, g.name || "-"),
             /* @__PURE__ */ React.createElement("div", { style: { fontSize: 11, color: C.muted } }, g.phone || "-"),
             /* @__PURE__ */ React.createElement("div", { style: { fontSize: 10, background: C.blue, color: "#fff", borderRadius: 4, padding: "1px 6px", display: "inline-block", marginTop: 2 } }, "\u0E23\u0E32\u0E22\u0E04\u0E23\u0E31\u0E49\u0E07")
@@ -3432,7 +3454,8 @@ function AdminAttendance({ sessions, members, guestBookings, onMark, onPromoteWL
         /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 5 } },
           /* @__PURE__ */ React.createElement("button", { className: "btn-capsule", onClick: (e) => { e.stopPropagation(); onMark(s.id, mid, "present"); }, style: { padding: "6px 10px", borderRadius: 7, fontSize: 11, fontWeight: 700, cursor: "pointer", background: gAtt === "present" ? C.green : C.gM, border: `1px solid ${gAtt === "present" ? C.green : "rgba(34,197,94,.3)"}`, color: gAtt === "present" ? "#fff" : C.green, fontFamily: FONT } }, "\u2713 \u0E21\u0E32"),
           /* @__PURE__ */ React.createElement("button", { className: "btn-capsule", onClick: (e) => { e.stopPropagation(); onMark(s.id, mid, "noshow"); }, style: { padding: "6px 10px", borderRadius: 7, fontSize: 11, fontWeight: 700, cursor: "pointer", background: gAtt === "noshow" ? C.red : C.rM, border: `1px solid ${gAtt === "noshow" ? C.red : "rgba(239,68,68,.3)"}`, color: gAtt === "noshow" ? "#fff" : C.red, fontFamily: FONT } }, "\u2717 \u0E44\u0E21\u0E48\u0E21\u0E32"),
-          /* @__PURE__ */ React.createElement("button", { className: "btn-capsule", onClick: (e) => { e.stopPropagation(); openRescheduleGuest(g, s); }, style: { padding: "6px 10px", borderRadius: 7, fontSize: 11, fontWeight: 700, cursor: "pointer", background: C.bM, border: "1px solid " + C.blue + "44", color: C.blue, fontFamily: FONT } }, "\u{1F5D3}\uFE0F \u0E40\u0E25\u0E37\u0E48\u0E2D\u0E19")
+          /* @__PURE__ */ React.createElement("button", { className: "btn-capsule", onClick: (e) => { e.stopPropagation(); openRescheduleGuest(g, s); }, style: { padding: "6px 10px", borderRadius: 7, fontSize: 11, fontWeight: 700, cursor: "pointer", background: C.bM, border: "1px solid " + C.blue + "44", color: C.blue, fontFamily: FONT } }, "\u{1F5D3}\uFE0F \u0E40\u0E25\u0E37\u0E48\u0E2D\u0E19"),
+          /* @__PURE__ */ React.createElement("button", { className: "btn-capsule", onClick: (e) => { e.stopPropagation(); setGuestCancelModal({ guestId: g.id, guestName: g.name, className: g.className || s.name, sessionId: s.id }); }, style: { padding: "6px 10px", borderRadius: 7, fontSize: 11, fontWeight: 700, cursor: "pointer", background: C.rM, border: "1px solid rgba(239,68,68,.3)", color: C.red, fontFamily: FONT } }, "✗ ยกเลิก")
         )
       );
       return /* @__PURE__ */ React.createElement("div", { key: mid, style: { display:"flex", alignItems:"center", justifyContent:"space-between", padding:"7px 0", borderBottom:"1px solid "+C.border } }, /* @__PURE__ */ React.createElement("div", { style:{display:"flex",alignItems:"center",gap:8} }, /* @__PURE__ */ React.createElement("div", { style:{width:34,height:34,borderRadius:"50%",background:gAtt==="present"?C.gM:gAtt==="noshow"?C.rM:C.surfUp,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14} }, gAtt==="present"?"\u2705":gAtt==="noshow"?"\u274C":"\u{1F464}"), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("div", { style:{color:C.sub,fontSize:13,fontWeight:600} }, "\u{1F464} \u0E2A\u0E21\u0E32\u0E0A\u0E34\u0E01"), /* @__PURE__ */ React.createElement("div", { style:{color:C.muted,fontSize:10} }, "ID: ", String(mid).length > 20 ? "\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E16\u0E39\u0E01\u0E40\u0E02\u0E35\u0E22\u0E19\u0E17\u0E31\u0E1A\u0E43\u0E19 Sheets" : mid))), /* @__PURE__ */ React.createElement("div", { style:{display:"flex",gap:5} }, /* @__PURE__ */ React.createElement("button", { className: "btn-capsule", onClick: (e) => { e.stopPropagation(); onMark(s.id, mid, "present"); }, style: { padding: "6px 10px", borderRadius: 7, fontSize: 11, fontWeight: 700, cursor: "pointer", background: gAtt === "present" ? C.green : C.gM, border: `1px solid ${gAtt === "present" ? C.green : "rgba(34,197,94,.3)"}`, color: gAtt === "present" ? "#fff" : C.green, fontFamily: FONT } }, "\u2713 \u0E21\u0E32"), /* @__PURE__ */ React.createElement("button", { className: "btn-capsule", onClick: (e) => { e.stopPropagation(); onMark(s.id, mid, "noshow"); }, style: { padding: "6px 10px", borderRadius: 7, fontSize: 11, fontWeight: 700, cursor: "pointer", background: gAtt === "noshow" ? C.red : C.rM, border: `1px solid ${gAtt === "noshow" ? C.red : "rgba(239,68,68,.3)"}`, color: gAtt === "noshow" ? "#fff" : C.red, fontFamily: FONT } }, "\u2717 \u0E44\u0E21\u0E48\u0E21\u0E32"), /* @__PURE__ */ React.createElement("button", { onClick: (e) => { e.stopPropagation(); if (window.confirm("\u0E22\u0E01\u0E40\u0E25\u0E34\u0E01\u0E01\u0E32\u0E23\u0E08\u0E2D\u0E07 ID: " + mid + "?")) onAdminCancel(s.id, mid); }, style: { padding: "6px 10px", borderRadius: 7, fontSize: 11, fontWeight: 700, cursor: "pointer", background: "rgba(239,68,68,.12)", border: "1px solid rgba(239,68,68,.4)", color: C.red, fontFamily: FONT } }, "\u2716 \u0E22\u0E01\u0E40\u0E25\u0E34\u0E01")));
@@ -3984,20 +4007,44 @@ function AdminNotifLog({ notifications, members, checkinLog, onSeen }) {
         })
   );
 }
+const SlipPreviewModal = ({ guest, onClose }) => {
+  if (!guest) return null;
+  const SP_STATUS = { confirmed: ["✓ ยืนยันแล้ว", C.green], pending: ["⏳ รอยืนยัน", C.orange], rejected: ["✗ ปฏิเสธ", C.red], cancelled: ["🚫 ยกเลิกแล้ว", C.muted] };
+  const st = SP_STATUS[guest.status] || ["", C.muted];
+  return /* @__PURE__ */ React.createElement(Overlay, { onClose },
+    /* @__PURE__ */ React.createElement("div", { style: { fontSize: 17, fontWeight: 800, color: C.text, marginBottom: 14, fontFamily: FONT } }, "รายละเอียดการชำระเงิน"),
+    /* @__PURE__ */ React.createElement("div", { style: { marginBottom: 14 } },
+      /* @__PURE__ */ React.createElement("div", { style: { fontSize: 15, fontWeight: 700, color: C.text } }, guest.name || "-"),
+      /* @__PURE__ */ React.createElement("div", { style: { fontSize: 12, color: C.muted, marginTop: 2 } }, "📞 ", guest.phone || "-")
+    ),
+    /* @__PURE__ */ React.createElement("div", { style: { background: C.bg, borderRadius: 10, padding: 12, marginBottom: 14 } },
+      /* @__PURE__ */ React.createElement("div", { style: { fontSize: 13, color: C.text, fontWeight: 600 } }, guest.className || "-"),
+      /* @__PURE__ */ React.createElement("div", { style: { fontSize: 12, color: C.muted, marginTop: 3 } }, thFmt(guest.classDate), " · ", guest.classTime),
+      /* @__PURE__ */ React.createElement("div", { style: { fontSize: 18, fontWeight: 800, color: C.green, marginTop: 6 } }, "฿", guest.amount)
+    ),
+    guest.slipUrl ? /* @__PURE__ */ React.createElement("img", { src: guest.slipUrl, alt: "slip", onClick: () => window.open(guest.slipUrl, "_blank"), style: { width: "100%", borderRadius: 10, cursor: "pointer", marginBottom: 14, display: "block" } }) : /* @__PURE__ */ React.createElement("div", { style: { textAlign: "center", padding: "24px 0", color: C.muted, fontSize: 13, marginBottom: 14 } }, "ไม่มีรูปสลิป"),
+    /* @__PURE__ */ React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 } },
+      /* @__PURE__ */ React.createElement("div", { style: { fontSize: 11, color: C.muted } }, guest.confirmedAt ? `ยืนยันเมื่อ ${new Date(guest.confirmedAt).toLocaleString("th-TH")}` : ""),
+      /* @__PURE__ */ React.createElement(Pill, { text: st[0], color: st[1] })
+    ),
+    /* @__PURE__ */ React.createElement(Btn, { label: "ปิด", bg: C.surfUp, col: C.text, onClick: onClose, full: true })
+  );
+};
 function AdminWalkIn({ guestBookings, onConfirm, showToast }) {
   const pending = useMemo(() => (guestBookings || []).filter((g) => g.status === "pending").sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt))), [guestBookings]);
   const done = useMemo(() => (guestBookings || []).filter((g) => g.status !== "pending").sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt))).slice(0, 20), [guestBookings]);
   const [busy, setBusy] = useState(null);
+  const [slipView, setSlipView] = useState(null);
   const handle = async (id, approve) => {
     setBusy(id);
     await onConfirm(id, approve);
     setBusy(null);
   };
-  const STATUS_LABEL = { confirmed: ["\u2705 \u0E22\u0E37\u0E19\u0E22\u0E31\u0E19\u0E41\u0E25\u0E49\u0E27", C.green], rejected: ["\u274C \u0E1B\u0E0F\u0E34\u0E40\u0E2A\u0E18", C.red] };
+  const STATUS_LABEL = { confirmed: ["\u2705 \u0E22\u0E37\u0E19\u0E22\u0E31\u0E19\u0E41\u0E25\u0E49\u0E27", C.green], rejected: ["\u274C \u0E1B\u0E0F\u0E34\u0E40\u0E2A\u0E18", C.red] , cancelled: ["🚫 ยกเลิกแล้ว", C.muted]};
   return /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("div", { style: { color: C.muted, fontSize: 11, fontWeight: 700, letterSpacing: 2, marginBottom: 10 } }, "\u{1F4B3} \u0E23\u0E2D\u0E15\u0E23\u0E27\u0E08\u0E2A\u0E2D\u0E1A (", pending.length, ")"), pending.length === 0 ? /* @__PURE__ */ React.createElement("div", { style: { textAlign: "center", padding: "40px 0", color: C.muted, fontSize: 13 } }, "\u0E44\u0E21\u0E48\u0E21\u0E35\u0E23\u0E32\u0E22\u0E01\u0E32\u0E23\u0E23\u0E2D\u0E15\u0E23\u0E27\u0E08\u0E2A\u0E2D\u0E1A") : pending.map((g) => /* @__PURE__ */ React.createElement("div", { key: g.id, style: { background: C.surf, borderRadius: 14, border: `1px solid ${C.amber}`, padding: 16, marginBottom: 12 } }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 12 } }, g.slipUrl ? /* @__PURE__ */ React.createElement("img", { src: g.slipUrl, alt: "slip", onClick: () => window.open(g.slipUrl, "_blank"), style: { width: 72, height: 72, objectFit: "cover", borderRadius: 10, cursor: "pointer", flexShrink: 0 } }) : /* @__PURE__ */ React.createElement("div", { style: { width: 72, height: 72, borderRadius: 10, background: C.bg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, flexShrink: 0 } }, "\u{1F4F7}"), /* @__PURE__ */ React.createElement("div", { style: { flex: 1, minWidth: 0 } }, /* @__PURE__ */ React.createElement("div", { style: { color: C.text, fontWeight: 700, fontSize: 14 } }, g.name), /* @__PURE__ */ React.createElement("div", { style: { color: C.muted, fontSize: 12, marginTop: 2 } }, "\u{1F4DE} ", g.phone), /* @__PURE__ */ React.createElement("div", { style: { color: C.orange, fontSize: 12, fontWeight: 600, marginTop: 4 } }, g.className, " \xB7 ", thFmt(g.classDate), " ", g.classTime), /* @__PURE__ */ React.createElement("div", { style: { color: C.green, fontWeight: 800, fontSize: 16, marginTop: 4 } }, "\u0E3F", g.amount))), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 8, marginTop: 12 } }, /* @__PURE__ */ React.createElement(Btn, { label: busy === g.id ? "\u23F3..." : "\u2715 \u0E1B\u0E0F\u0E34\u0E40\u0E2A\u0E18", bg: C.rM, col: C.red, onClick: () => handle(g.id, false), full: true, disabled: busy === g.id }), /* @__PURE__ */ React.createElement(Btn, { label: busy === g.id ? "\u23F3..." : "\u2713 \u0E22\u0E37\u0E19\u0E22\u0E31\u0E19", bg: C.green, onClick: () => handle(g.id, true), full: true, disabled: busy === g.id })))), done.length > 0 && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", { style: { color: C.muted, fontSize: 11, fontWeight: 700, letterSpacing: 2, marginTop: 20, marginBottom: 10 } }, "\u0E1B\u0E23\u0E30\u0E27\u0E31\u0E15\u0E34\u0E25\u0E48\u0E32\u0E2A\u0E38\u0E14"), done.map((g) => {
     const st = STATUS_LABEL[g.status] || ["", C.muted];
-    return /* @__PURE__ */ React.createElement("div", { key: g.id, style: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "9px 12px", background: C.surf, borderRadius: 10, border: `1px solid ${C.border}`, marginBottom: 6 } }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("div", { style: { color: C.text, fontSize: 12, fontWeight: 600 } }, g.name, " \xB7 ", g.className), /* @__PURE__ */ React.createElement("div", { style: { color: C.muted, fontSize: 10, marginTop: 1 } }, thFmt(g.classDate), " ", g.classTime)), /* @__PURE__ */ React.createElement(Pill, { text: st[0], color: st[1] }));
-  })));
+    return /* @__PURE__ */ React.createElement("div", { key: g.id, onClick: () => { if (g.slipUrl) { setSlipView(g); } else { showToast("ไม่มีรูปสลิปสำหรับรายการนี้", "err"); } }, style: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "9px 12px", background: C.surf, borderRadius: 10, border: `1px solid ${C.border}`, marginBottom: 6, cursor: "pointer" } }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("div", { style: { color: C.text, fontSize: 12, fontWeight: 600 } }, g.name, " \xB7 ", g.className), /* @__PURE__ */ React.createElement("div", { style: { color: C.muted, fontSize: 10, marginTop: 1 } }, thFmt(g.classDate), " ", g.classTime)), /* @__PURE__ */ React.createElement(Pill, { text: st[0], color: st[1] }));
+  }), slipView && /* @__PURE__ */ React.createElement(SlipPreviewModal, { guest: slipView, onClose: () => setSlipView(null) })));
 }
 function FeedbackView({ member, feedback, onSubmit, showToast, etiquetteRules }) {
   const [type, setType] = useState("feedback");
@@ -5204,6 +5251,26 @@ function App() {
     }
     return res;
   }, [auth, postAction, sessions, save, showToast]);
+  const adminCancelGuest = useCallback(async (guestId, sessionId, guestName) => {
+    const res = await postAction("adminCancelGuest", { guestId }).catch((e) => ({ ok: false, error: e.message }));
+    if (res && res.ok) {
+      setSessions((prev) => {
+        const ns = __spreadValues({}, prev);
+        if (ns[sessionId]) ns[sessionId] = __spreadProps(__spreadValues({}, ns[sessionId]), { bk: ns[sessionId].bk.filter((x) => String(x) !== String(guestId)) });
+        save("apex_sessions", ns);
+        return ns;
+      });
+      setGuestBookings((prev) => {
+        const ng = prev.map((g) => String(g.id) === String(guestId) ? __spreadProps(__spreadValues({}, g), { status: "cancelled" }) : g);
+        save("apex_guest_bookings", ng);
+        return ng;
+      });
+      showToast(`✅ ยกเลิกการจองของ ${guestName || ""} สำเร็จเรียบร้อย`, "ok");
+    } else {
+      showToast((res && res.error) || "เกิดข้อผิดพลาด", "err");
+    }
+    return res;
+  }, [postAction, save, showToast]);
   // ✅ เลื่อนวัน/คลาสลูกค้ารายครั้ง (reschedule a guest/per-session booking to another session)
   const rescheduleGuest = useCallback(async (guestId, oldSessionId, newSessionId) => {
     const res = await postAction("rescheduleGuestBooking", { guestId, oldSessionId, newSessionId }).catch((e) => ({ ok: false, error: e.message }));
@@ -5586,7 +5653,7 @@ const unreadCount = useMemo(() => cur ? (notifications || []).filter((n) => n.mi
           React.createElement("option", { value: "ko" }, "🇰🇷 한국어"),
           React.createElement("option", { value: "ja" }, "🇯🇵 日本語")
         ),
-        /* @__PURE__ */ React.createElement(ThemeToggle, { dark, toggle: toggleTheme, style: { padding: "4px 8px", fontSize: 11 } }), /* @__PURE__ */ React.createElement("button", { onClick: logout, style: { background: C2.surf, border: `1px solid ${C2.border}`, borderRadius: 9, padding: "5px 10px", color: C2.muted, fontSize: 12, cursor: "pointer", fontFamily: FONT } }, t("logout"))))), /* @__PURE__ */ React.createElement("div", { style: { padding: "14px 14px", paddingBottom: 90, minHeight: "calc(100vh - 56px)" } }, isAdmin ? /* @__PURE__ */ React.createElement(React.Fragment, null, view === "overview" && /* @__PURE__ */ React.createElement(AdminDashboard, { members, sessions, classes, guestBookings }), view === "attend" && /* @__PURE__ */ React.createElement(AdminAttendance, { sessions, members, guestBookings, onMark: markAtt, onPromoteWL: promoteWL, onAdminCancel: adminCancel, onAdminAddGuest: adminAddGuest, onRescheduleGuest: rescheduleGuest, onSaveOverride: saveSessionOverride, postAction, showToast }), view === "kiosk" && /* @__PURE__ */ React.createElement(KioskView, { members, sessions, onKioskBook: kioskBook, onKioskCheckin: kioskCheckin, showToast }), view === "walkin" && /* @__PURE__ */ React.createElement(AdminWalkIn, { guestBookings, onConfirm: confirmGuestPayment, showToast }), view === "members" && /* @__PURE__ */ React.createElement(AdminMembers, { members, sessions, settings, onSaveMember: saveMember, onUnlockDevice: unlockDevice, showToast, onUpdatePhone: updateMemberPhone, onKioskBook: kioskBook }), view === "expiring" && /* @__PURE__ */ React.createElement(AdminExpiringMembers, { members }), view === "adminfeedback" && /* @__PURE__ */ React.createElement(AdminFeedback, { feedback, onResolve: resolveFeedback, showToast }), view === "notiflog" && /* @__PURE__ */ React.createElement(AdminNotifLog, { notifications, members, checkinLog, onSeen: markNotifLogSeen }), view === "reports" && /* @__PURE__ */ React.createElement(AdminReports, { sessions, members, classes, showToast, postAction }), view === "settings" && /* @__PURE__ */ React.createElement(AdminSettings, { settings, onSave: saveSettings, members, onUnlockDevice: unlockDevice, showToast, onUploadImage: uploadImage, postAction, etiquetteRules, onSaveEtiquette: saveEtiquette, onOpenClassMgmt: () => setHeaderClassMgmt(true) }), view === "staffmgmt" && /* @__PURE__ */ React.createElement(AdminStaffManagement, { staff, postAction, showToast })) : /* @__PURE__ */ React.createElement(React.Fragment, null, view === "schedule" && /* @__PURE__ */ React.createElement(ScheduleView, { sessions, member: cur, settings, onBook: book, onWaitlist: joinWL, onCancel: cancel, onCancelWL: cancelWL, onToggleWlOptIn: toggleWlOptIn }), view === "myBookings" && /* @__PURE__ */ React.createElement(MyBookingsView, { sessions, member: cur, settings, onCancel: cancel, onCancelWL: cancelWL, onCheckin: checkin, pendingWL, onConfirmWL: confirmWLSpot, onDeclineWL: declineWLSpot }), view === "checkin" && /* @__PURE__ */ React.createElement(CheckinView, { sessions, member: cur, settings, onCheckin: checkin, showToast }), view === "notifs" && /* @__PURE__ */ React.createElement(NotificationsView, { notifications, member: cur, onRead: markNotifRead }), view === "feedback" && /* @__PURE__ */ React.createElement(FeedbackView, { member: cur, feedback, onSubmit: submitFeedback, showToast, etiquetteRules }), view === "profile" && /* @__PURE__ */ React.createElement(ProfileView, { member: cur, sessions, settings, onUploadPhoto: uploadMemberPhoto, onToggleWlOptIn: toggleWlOptIn, onPasswordChanged }))), /* @__PURE__ */ React.createElement("div", { className: "apex-nav", style: { position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 440, background: C2.surf, borderTop: `1px solid ${C2.border}`, padding: "8px 0 18px", display: "flex", justifyContent: "space-around", alignItems: "flex-end", zIndex: 50 } },
+        /* @__PURE__ */ React.createElement(ThemeToggle, { dark, toggle: toggleTheme, style: { padding: "4px 8px", fontSize: 11 } }), /* @__PURE__ */ React.createElement("button", { onClick: logout, style: { background: C2.surf, border: `1px solid ${C2.border}`, borderRadius: 9, padding: "5px 10px", color: C2.muted, fontSize: 12, cursor: "pointer", fontFamily: FONT } }, t("logout"))))), /* @__PURE__ */ React.createElement("div", { style: { padding: "14px 14px", paddingBottom: 90, minHeight: "calc(100vh - 56px)" } }, isAdmin ? /* @__PURE__ */ React.createElement(React.Fragment, null, view === "overview" && /* @__PURE__ */ React.createElement(AdminDashboard, { members, sessions, classes, guestBookings }), view === "attend" && /* @__PURE__ */ React.createElement(AdminAttendance, { sessions, members, guestBookings, onMark: markAtt, onPromoteWL: promoteWL, onAdminCancel: adminCancel, onAdminAddGuest: adminAddGuest, onRescheduleGuest: rescheduleGuest, onSaveOverride: saveSessionOverride, onAdminCancelGuest: adminCancelGuest, postAction, showToast }), view === "kiosk" && /* @__PURE__ */ React.createElement(KioskView, { members, sessions, onKioskBook: kioskBook, onKioskCheckin: kioskCheckin, showToast }), view === "walkin" && /* @__PURE__ */ React.createElement(AdminWalkIn, { guestBookings, onConfirm: confirmGuestPayment, showToast }), view === "members" && /* @__PURE__ */ React.createElement(AdminMembers, { members, sessions, settings, onSaveMember: saveMember, onUnlockDevice: unlockDevice, showToast, onUpdatePhone: updateMemberPhone, onKioskBook: kioskBook }), view === "expiring" && /* @__PURE__ */ React.createElement(AdminExpiringMembers, { members }), view === "adminfeedback" && /* @__PURE__ */ React.createElement(AdminFeedback, { feedback, onResolve: resolveFeedback, showToast }), view === "notiflog" && /* @__PURE__ */ React.createElement(AdminNotifLog, { notifications, members, checkinLog, onSeen: markNotifLogSeen }), view === "reports" && /* @__PURE__ */ React.createElement(AdminReports, { sessions, members, classes, showToast, postAction }), view === "settings" && /* @__PURE__ */ React.createElement(AdminSettings, { settings, onSave: saveSettings, members, onUnlockDevice: unlockDevice, showToast, onUploadImage: uploadImage, postAction, etiquetteRules, onSaveEtiquette: saveEtiquette, onOpenClassMgmt: () => setHeaderClassMgmt(true) }), view === "staffmgmt" && /* @__PURE__ */ React.createElement(AdminStaffManagement, { staff, postAction, showToast })) : /* @__PURE__ */ React.createElement(React.Fragment, null, view === "schedule" && /* @__PURE__ */ React.createElement(ScheduleView, { sessions, member: cur, settings, onBook: book, onWaitlist: joinWL, onCancel: cancel, onCancelWL: cancelWL, onToggleWlOptIn: toggleWlOptIn }), view === "myBookings" && /* @__PURE__ */ React.createElement(MyBookingsView, { sessions, member: cur, settings, onCancel: cancel, onCancelWL: cancelWL, onCheckin: checkin, pendingWL, onConfirmWL: confirmWLSpot, onDeclineWL: declineWLSpot }), view === "checkin" && /* @__PURE__ */ React.createElement(CheckinView, { sessions, member: cur, settings, onCheckin: checkin, showToast }), view === "notifs" && /* @__PURE__ */ React.createElement(NotificationsView, { notifications, member: cur, onRead: markNotifRead }), view === "feedback" && /* @__PURE__ */ React.createElement(FeedbackView, { member: cur, feedback, onSubmit: submitFeedback, showToast, etiquetteRules }), view === "profile" && /* @__PURE__ */ React.createElement(ProfileView, { member: cur, sessions, settings, onUploadPhoto: uploadMemberPhoto, onToggleWlOptIn: toggleWlOptIn, onPasswordChanged }))), /* @__PURE__ */ React.createElement("div", { className: "apex-nav", style: { position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)", width: "100%", maxWidth: 440, background: C2.surf, borderTop: `1px solid ${C2.border}`, padding: "8px 0 18px", display: "flex", justifyContent: "space-around", alignItems: "flex-end", zIndex: 50 } },
     isAdmin ? (() => {
       const PRIMARY = NAV.slice(0, 4);
       const MORE = NAV.slice(4);
