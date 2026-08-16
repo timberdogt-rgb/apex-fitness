@@ -1115,7 +1115,7 @@ body.apex-light {
     "saveGymLocation", "saveSystemSettings", "saveSessionOverride", "updateMemberAvatar", "updateAutoSlotClaim", "getInstructorMonthlySummary", "uploadImage", "uploadMemberPhoto", "submitGuestBooking",
     "loginPassword", "changeMemberPassword", "book", "cancel", "joinWaitlist", "cancelWaitlist",
     "checkin", "markAttendance", "adminAddGuest", "rescheduleGuestBooking", "confirmGuestPayment",
-    "getAttendanceHistory", "saveDailyClassSummary", "evaluateNoShows", "getHotClassesReport", "adminCancelGuest", "adminCancel"
+    "getAttendanceHistory", "saveDailyClassSummary", "evaluateNoShows", "getHotClassesReport", "adminCancelGuest", "adminCancel", "changeAdminPin"
   ]);
   async function fetchAllRows(table, applyFilter) {
     let all = [];
@@ -1203,6 +1203,7 @@ body.apex-light {
     if (sysSettingsRow.checkin_radius_m != null) gymLocOverride.checkinRadiusM = sysSettingsRow.checkin_radius_m;
     if (sysSettingsRow.qr_code_url != null) gymLocOverride.guestQrImage = sysSettingsRow.qr_code_url;
     if (sysSettingsRow.schedule_poster_url != null) gymLocOverride.scheduleImage = sysSettingsRow.schedule_poster_url;
+    if (sysSettingsRow.admin_password) gymLocOverride.adminPassword = sysSettingsRow.admin_password;
     return Object.assign({}, legacy, { members: members, classes: classes, sessions: sessions, bookings: bookings, attendance: attendance, guestBookings: guestBookings, settings: Object.assign({}, legacy.settings, gymLocOverride) });
   }
   async function supabaseAction(action, data) {
@@ -1275,6 +1276,17 @@ body.apex-light {
       }
       if (action === "changeMemberPassword") {
         const r = await sbClient.from("members").update({ pin: String(data.newPassword), password_changed: true }).eq("id", String(data.id));
+        if (r.error) return { ok: false, error: "บันทึกไม่สำเร็จ" };
+        return { ok: true };
+      }
+      if (action === "changeAdminPin") {
+        const oldPass = String(data.currentPin || "").trim();
+        const newPass = String(data.newPin || "").trim();
+        const r0 = await sbClient.from("system_settings").select("admin_password").eq("id", 1).limit(1);
+        if (r0.error) return { ok: false, error: "ตรวจสอบรหัสไม่สำเร็จ" };
+        const activePass = (r0.data && r0.data[0] && r0.data[0].admin_password) || ADMIN_CREDS.owner.pass;
+        if (oldPass !== activePass) return { ok: false, error: "รหัสเก่าไม่ถูกต้อง" };
+        const r = await sbClient.from("system_settings").update({ admin_password: newPass }).eq("id", 1);
         if (r.error) return { ok: false, error: "บันทึกไม่สำเร็จ" };
         return { ok: true };
       }
@@ -2164,7 +2176,7 @@ const ApexLogo = ({ dark, size = "full" }) => {
     style: { width: w, height: "auto", objectFit: "contain", display: "block" }
   });
 };
-function LoginScreen({ onLogin, deviceId, members, onMembersUpdate, onGuestBooking, onLineLogin, lang, setLang }) {
+function LoginScreen({ onLogin, deviceId, members, onMembersUpdate, onGuestBooking, onLineLogin, lang, setLang, settings }) {
   const [C2, dark, toggleTheme] = useTheme();
   const [phone, setPhone] = useState("");
   const [step, setStep] = useState("phone");
@@ -2241,7 +2253,8 @@ function LoginScreen({ onLogin, deviceId, members, onMembersUpdate, onGuestBooki
     if (!loginId || !password) { setPwErr("กรุณากรอกเบอร์โทร/ชื่อผู้ใช้และรหัสผ่าน"); return; }
     if (isAdmin(lower)) {
       const cred = Object.values(ADMIN_CREDS).find((c) => c.user === lower);
-      if (cred && password === cred.pass) {
+      const activePass = cred && cred.user === "admin" ? ((settings && settings.adminPassword) || cred.pass) : (cred && cred.pass);
+      if (cred && password === activePass) {
         onLogin({ type: cred.role, adminName: cred.name });
         return;
       }
@@ -4320,13 +4333,20 @@ function AdminSettings({ settings, onSave, members, onUnlockDevice, showToast, o
     else { showToast((r1.error || r2.error) || "บันทึกพิกัดไม่สำเร็จ", "err"); }
   };
   const changePin = async () => {
-    if (!pinForm.cur) { showToast("⚠️ ใส่รหัสเดิมก่อน", "warn"); return; }
-    if (pinForm.new1.length < 4) { showToast("⚠️ รหัสใหม่ต้องมีอย่างน้อย 4 ตัว", "warn"); return; }
-    if (pinForm.new1 !== pinForm.new2) { showToast("⚠️ รหัสใหม่ไม่ตรงกัน", "warn"); return; }
+    const oldPass = pinForm.cur.trim();
+    const newPass = pinForm.new1.trim();
+    const confirmPass = pinForm.new2.trim();
+    if (!oldPass) { showToast("⚠️ ใส่รหัสเดิมก่อน", "warn"); return; }
+    if (newPass.length < 4) { showToast("⚠️ รหัสใหม่ต้องมีอย่างน้อย 4 ตัว", "warn"); return; }
+    if (newPass !== confirmPass) { showToast("⚠️ รหัสใหม่ไม่ตรงกัน", "warn"); return; }
     setPinSaving(true);
     try {
-      const res = await postAction("changeAdminPin", { currentPin: pinForm.cur, newPin: pinForm.new1 });
-      if (res && res.ok) { showToast("✅ เปลี่ยนรหัส Admin แล้ว", "ok"); setPinForm({ cur: "", new1: "", new2: "" }); }
+      const res = await postAction("changeAdminPin", { currentPin: oldPass, newPin: newPass });
+      if (res && res.ok) {
+        showToast("✅ เปลี่ยนรหัส Admin สำเร็จเรียบร้อย", "ok");
+        setPinForm({ cur: "", new1: "", new2: "" });
+        onSave(Object.assign({}, settings, { adminPassword: newPass }));
+      }
       else { showToast("❌ " + ((res && res.error) || "error"), "err"); }
     } catch(e) { showToast("❌ " + e.message, "err"); }
     setPinSaving(false);
@@ -5611,6 +5631,7 @@ const unreadCount = useMemo(() => cur ? (notifications || []).filter((n) => n.mi
     onLogin: login, deviceId, members,
     onMembersUpdate: (freshM) => { setMembers(freshM); store.set("apex_members", freshM); },
     onGuestBooking: () => setShowGuestFlow(true),
+    settings,
     onLineLogin: lineLogin,
     lang, setLang,
   }), showGuestFlow && /* @__PURE__ */ React.createElement(GuestBookingFlow, { sessions, settings, onSubmit: submitGuestBooking, onClose: () => setShowGuestFlow(false), showToast }));
