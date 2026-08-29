@@ -1115,7 +1115,7 @@ body.apex-light {
     "saveGymLocation", "saveSystemSettings", "saveSessionOverride", "updateMemberAvatar", "updateAutoSlotClaim", "getInstructorMonthlySummary", "uploadImage", "uploadMemberPhoto", "submitGuestBooking",
     "loginPassword", "changeMemberPassword", "book", "cancel", "joinWaitlist", "cancelWaitlist",
     "checkin", "markAttendance", "adminAddGuest", "rescheduleGuestBooking", "confirmGuestPayment",
-    "getAttendanceHistory", "saveDailyClassSummary", "evaluateNoShows", "getHotClassesReport", "adminCancelGuest", "adminCancel", "changeAdminPin"
+    "getAttendanceHistory", "saveDailyClassSummary", "evaluateNoShows", "getHotClassesReport", "adminCancelGuest", "adminCancel", "changeAdminPin", "saveMember"
   ]);
   async function fetchAllRows(table, applyFilter) {
     let all = [];
@@ -1204,6 +1204,7 @@ body.apex-light {
     if (sysSettingsRow.qr_code_url != null) gymLocOverride.guestQrImage = sysSettingsRow.qr_code_url;
     if (sysSettingsRow.schedule_poster_url != null) gymLocOverride.scheduleImage = sysSettingsRow.schedule_poster_url;
     if (sysSettingsRow.admin_password) gymLocOverride.adminPassword = sysSettingsRow.admin_password;
+    if (sysSettingsRow.announcement !== null) gymLocOverride.announcement = sysSettingsRow.announcement;
     return Object.assign({}, legacy, { members: members, classes: classes, sessions: sessions, bookings: bookings, attendance: attendance, guestBookings: guestBookings, settings: Object.assign({}, legacy.settings, gymLocOverride) });
   }
   async function supabaseAction(action, data) {
@@ -1332,8 +1333,33 @@ body.apex-light {
         return { ok: true, lat: data.lat, lng: data.lng };
       }
       if (action === "saveSystemSettings") {
-        const r = await sbClient.rpc("rpc_save_system_settings", { p_checkin_radius_m: data.checkinRadiusM != null ? data.checkinRadiusM : null, p_qr_code_url: data.qrCodeUrl != null ? data.qrCodeUrl : null, p_schedule_poster_url: data.schedulePosterUrl != null ? data.schedulePosterUrl : null });
+        const r = await sbClient.rpc("rpc_save_system_settings", { p_checkin_radius_m: data.checkinRadiusM != null ? data.checkinRadiusM : null, p_qr_code_url: data.qrCodeUrl != null ? data.qrCodeUrl : null, p_schedule_poster_url: data.schedulePosterUrl != null ? data.schedulePosterUrl : null, p_announcement: data.announcement !== undefined ? data.announcement : null });
         if (r.error || (r.data && r.data.ok === false)) return { ok: false, error: (r.data && r.data.error) || "บันทึกการตั้งค่าไม่สำเร็จ" };
+        return { ok: true };
+      }
+      if (action === "saveMember") {
+        const mem = data.member || {};
+        const payload = {
+          id: String(mem.id),
+          name: mem.name || "",
+          phone: String(mem.phone || ""),
+          pin: String(mem.pin || "1234"),
+          line_id: mem.lineId || null,
+          membership_type: mem.membershipType || null,
+          membership_expiry: mem.membershipExpiry || null,
+          sessions_left: (mem.sessionsLeft === "" || mem.sessionsLeft === undefined || mem.sessionsLeft === null) ? null : mem.sessionsLeft,
+          no_show_count: mem.noShowCount || 0,
+          penalty_level: mem.penaltyLevel || 0,
+          no_show_window_start: mem.noShowWindowStart || null,
+          suspended: !!mem.suspended,
+          suspended_until: mem.suspendedUntil || null,
+          join_date: mem.joinDate || null,
+          password_changed: !!mem.passwordChanged,
+          avatar_url: mem.photoUrl || null,
+          auto_slot_claim: !!mem.autoSlotClaim
+        };
+        const r = await sbClient.from("members").upsert(payload, { onConflict: "id" });
+        if (r.error) return { ok: false, error: "บันทึกสมาชิกไม่สำเร็จ" };
         return { ok: true };
       }
       if (action === "saveSessionOverride") {
@@ -5148,12 +5174,17 @@ function App() {
     await postAction("cancel", { sessionId: sid, memberId: String(mid) });
   }, [sessions, members, showToast, save, postAction]);
   const saveMember = useCallback(async (newM) => {
+    const prevM = members.find((m) => m.id === newM.id);
     const nm = members.some((m) => m.id === newM.id) ? members.map((m) => m.id === newM.id ? newM : m) : [...members, newM];
     setMembers(nm);
     save("apex_members", nm);
-    showToast(`\u0E1A\u0E31\u0E19\u0E17\u0E36\u0E01 ${newM.name} \u0E41\u0E25\u0E49\u0E27 \u2713`, "ok");
+    if (prevM && prevM.suspended && !newM.suspended) {
+      showToast("✅ บันทึกข้อมูลและปลดระงับสมาชิกเรียบร้อย", "ok");
+    } else {
+      showToast(`บันทึก ${newM.name} แล้ว ✓`, "ok");
+    }
     const res = await postAction("saveMember", { member: newM });
-    if (!res.ok && !res._offline) showToast(res.error || "\u0E1A\u0E31\u0E19\u0E17\u0E36\u0E01\u0E02\u0E36\u0E49\u0E19 Sheets \u0E44\u0E21\u0E48\u0E2A\u0E33\u0E40\u0E23\u0E47\u0E08", "err");
+    if (!res.ok && !res._offline) showToast(res.error || "บันทึกขึ้น Sheets ไม่สำเร็จ", "err");
   }, [members, save, showToast, postAction]);
   const updateMemberPhone = useCallback(async (memberId, newPhone) => {
     const res = await postAction("updateMemberPhone", { memberId, newPhone });
@@ -5174,7 +5205,7 @@ function App() {
   const saveSettings = useCallback(async (ns) => {
     setSettings(ns);
     save("apex_settings", ns);
-    postAction("saveSystemSettings", { qrCodeUrl: ns.guestQrImage || null, schedulePosterUrl: ns.scheduleImage || null }).catch(() => {});
+    postAction("saveSystemSettings", { qrCodeUrl: ns.guestQrImage || null, schedulePosterUrl: ns.scheduleImage || null, announcement: ns.announcement || "" }).catch(() => {});
     const res = await postAction("saveSettings", { settings: ns });
     if (res.ok) {
       if (res.updatedUrls && Object.keys(res.updatedUrls).length > 0) {
