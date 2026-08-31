@@ -831,6 +831,23 @@ body.apex-light {
     if (str.startsWith("0")) str = str.slice(1);
     return str;
   }
+  function buildPhoneCandidates(raw, countryCode) {
+    const digits = String(raw || "").replace(/[^\d]/g, "");
+    if (!digits) return [];
+    const cc = countryCode ? String(countryCode).replace(/\D/g, "") : "";
+    const set = new Set([digits]);
+    if (cc && cc !== "66") {
+      let local = digits;
+      if (local.startsWith(cc)) local = local.slice(cc.length);
+      if (local) { set.add(cc + local); set.add(local); }
+    } else {
+      let local = digits;
+      if (local.startsWith("66") && local.length >= 11) local = local.slice(2);
+      if (local.startsWith("0")) local = local.slice(1);
+      if (local) { set.add(local); set.add("0" + local); set.add("66" + local); }
+    }
+    return Array.from(set);
+  }
   const sbClient = (typeof supabase !== "undefined") ? supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
 
   function ClassManagementModal(props) {
@@ -1267,8 +1284,10 @@ body.apex-light {
         return { ok: true, guestId: sd && sd.guestId };
       }
       if (action === "loginPassword") {
-        const phone = normalizePhone(data.phone);
-        const q = await sbClient.from("members").select("*").eq("phone", phone).limit(1);
+        const candidates = buildPhoneCandidates(data.phone, data.countryCode);
+        if (!candidates.length) return { ok: false, error: "กรุณากรอกเบอร์โทร" };
+        const orFilter = candidates.map((c) => `phone.eq.${c},id.eq.${c}`).join(",");
+        const q = await sbClient.from("members").select("*").or(orFilter).limit(1);
         if (q.error) return { ok: false, error: "เชื่อมต่อระบบไม่สำเร็จ" };
         const m = q.data && q.data[0];
         if (!m) return { ok: false, error: "ไม่พบเบอร์โทรนี้ในระบบ" };
@@ -1467,8 +1486,10 @@ body.apex-light {
         return { ok: true };
       }
             if (action === "requestPasswordReset") {
-        const phone = normalizePhone(data.phone);
-        const r = await sbClient.from("members").update({ reset_requested: true }).eq("phone", phone).select("id");
+        const candidates = buildPhoneCandidates(data.phone, data.countryCode);
+        if (!candidates.length) return { ok: false, error: "กรุณากรอกเบอร์โทร" };
+        const orFilter = candidates.map((c) => `phone.eq.${c},id.eq.${c}`).join(",");
+        const r = await sbClient.from("members").update({ reset_requested: true }).or(orFilter).select("id");
         if (r.error) return { ok: false, error: "ส่งคำขอไม่สำเร็จ" };
         if (!r.data || !r.data.length) return { ok: false, error: "ไม่พบเบอร์นี้ในระบบ" };
         return { ok: true };
@@ -2242,6 +2263,7 @@ function LoginScreen({ onLogin, deviceId, members, onMembersUpdate, onGuestBooki
   const [C2, dark, toggleTheme] = useTheme();
   const [phone, setPhone] = useState("");
   const [step, setStep] = useState("phone");
+  const [countryCode, setCountryCode] = useState("66");
   const [otp, setOtp] = useState("");
   const [generatedOTP, setGeneratedOTP] = useState("");
   const [otpExpiry, setOtpExpiry] = useState(null);
@@ -2331,11 +2353,11 @@ function LoginScreen({ onLogin, deviceId, members, onMembersUpdate, onGuestBooki
     try {
       let d;
       if (sbClient && SUPABASE_MIGRATED_ACTIONS.has("loginPassword")) {
-        d = await supabaseAction("loginPassword", { phone: loginId, password });
+        d = await supabaseAction("loginPassword", { phone: loginId, password, countryCode });
       } else {
         const r = await fetch(APPS_SCRIPT_URL, {
           method: "POST",
-          body: JSON.stringify({ action: "loginPassword", phone: loginId, password }),
+          body: JSON.stringify({ action: "loginPassword", phone: loginId, password, countryCode }),
           signal: AbortSignal.timeout(15000),
         });
         d = await r.json();
@@ -2596,7 +2618,21 @@ function LoginScreen({ onLogin, deviceId, members, onMembersUpdate, onGuestBooki
   /* @__PURE__ */ React.createElement("div", { style: { fontSize: 18, fontWeight: 800, color: C2.text, marginBottom: 4 } }, _t("lgPwTitle")),
   /* @__PURE__ */ React.createElement("div", { style: { fontSize: 13, color: C2.muted, marginBottom: 20 } }, _t("lgPwSub")),
   /* @__PURE__ */ React.createElement("div", { style: { fontSize: 12, color: C2.muted, marginBottom: 14, lineHeight: 1.5 } }, _t("lgPwHint")),
-  /* @__PURE__ */ React.createElement("input", { value: phone, onChange: (e) => { setPhone(e.target.value); setPwErr(""); }, type: "text", autoCapitalize: "none", autoCorrect: "off", placeholder: _t("lgPhonePh"), onKeyDown: (e) => e.key === "Enter" && loginWithPassword(), style: { width: "100%", padding: "14px 16px", background: C2.surfUp, border: `1.5px solid ${pwErr ? C2.red : C2.border}`, borderRadius: 12, color: C2.text, fontSize: 16, boxSizing: "border-box", outline: "none", fontFamily: FONT, marginBottom: 12 } }),
+  /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 8, marginBottom: 12 } },
+  /* @__PURE__ */ React.createElement("select", { value: countryCode, onChange: (e) => setCountryCode(e.target.value), style: { width: 96, padding: "14px 4px", background: C2.surfUp, border: `1.5px solid ${C2.border}`, borderRadius: 12, color: C2.text, fontSize: 13, boxSizing: "border-box", outline: "none", fontFamily: FONT, flexShrink: 0 } },
+    React.createElement("option", { value: "66" }, "\uD83C\uDDF9\uD83C\uDDED +66"),
+    React.createElement("option", { value: "44" }, "\uD83C\uDDEC\uD83C\uDDE7 +44"),
+    React.createElement("option", { value: "1" }, "\uD83C\uDDFA\uD83C\uDDF8 +1"),
+    React.createElement("option", { value: "86" }, "\uD83C\uDDE8\uD83C\uDDF3 +86"),
+    React.createElement("option", { value: "81" }, "\uD83C\uDDEF\uD83C\uDDF5 +81"),
+    React.createElement("option", { value: "61" }, "\uD83C\uDDE6\uD83C\uDDFA +61"),
+    React.createElement("option", { value: "49" }, "\uD83C\uDDE9\uD83C\uDDEA +49"),
+    React.createElement("option", { value: "33" }, "\uD83C\uDDEB\uD83C\uDDF7 +33"),
+    React.createElement("option", { value: "7" }, "\uD83C\uDDF7\uD83C\uDDFA +7"),
+    React.createElement("option", { value: "" }, "\uD83C\uDF10 \u0E2D\u0E37\u0E48\u0E19\u0E46/\u0E01\u0E23\u0E2D\u0E01\u0E15\u0E23\u0E07")
+  ),
+  /* @__PURE__ */ React.createElement("input", { value: phone, onChange: (e) => { setPhone(e.target.value); setPwErr(""); }, type: "text", autoCapitalize: "none", autoCorrect: "off", placeholder: _t("lgPhonePh"), onKeyDown: (e) => e.key === "Enter" && loginWithPassword(), style: { width: "100%", padding: "14px 16px", background: C2.surfUp, border: `1.5px solid ${pwErr ? C2.red : C2.border}`, borderRadius: 12, color: C2.text, fontSize: 16, boxSizing: "border-box", outline: "none", fontFamily: FONT, flex: 1 } })
+),
   /* @__PURE__ */ React.createElement("input", { value: password, onChange: (e) => { setPassword(e.target.value); setPwErr(""); }, type: "password", placeholder: _t("lgPassPh"), onKeyDown: (e) => e.key === "Enter" && loginWithPassword(), style: { width: "100%", padding: "14px 16px", background: C2.surfUp, border: `1.5px solid ${pwErr ? C2.red : C2.border}`, borderRadius: 12, color: C2.text, fontSize: 16, boxSizing: "border-box", outline: "none", fontFamily: FONT } }),
   pwErr ? /* @__PURE__ */ React.createElement("div", { style: { color: C2.red, marginTop: 10, padding: "10px 14px", background: C2.rM, borderRadius: 10, lineHeight: 1.6, fontSize: 13 } }, "⚠️ ", pwErr) : null,
   /* @__PURE__ */ React.createElement("div", { style: { textAlign: "right", marginTop: -6, marginBottom: 10 } }, /* @__PURE__ */ React.createElement("span", { onClick: () => { setShowForgotModal(true); setResetPhone(phone || ""); setResetMsg(""); }, style: { fontSize: 13, color: C2.orange, cursor: "pointer", fontFamily: FONT, textDecoration: "underline" } }, "ลืมรหัสผ่าน?")),
@@ -2614,7 +2650,7 @@ function LoginScreen({ onLogin, deviceId, members, onMembersUpdate, onGuestBooki
         try {
           let r;
           if (sbClient && SUPABASE_MIGRATED_ACTIONS.has("requestPasswordReset")) {
-            r = await supabaseAction("requestPasswordReset", { phone: ph });
+            r = await supabaseAction("requestPasswordReset", { phone: ph, countryCode });
           } else {
             r = { ok: false, error: "ไม่พร้อมใช้งาน" };
           }
@@ -3209,7 +3245,9 @@ function KioskView({ members, sessions, onKioskBook, onKioskCheckin, showToast }
     if (clean.length < 9) { showToast("\u0E01\u0E23\u0E2D\u0E01\u0E40\u0E1A\u0E2D\u0E23\u0E4C\u0E42\u0E17\u0E23\u0E43\u0E2B\u0E49\u0E04\u0E23\u0E1A 9-10 \u0E2B\u0E25\u0E31\u0E01", "err"); return; }
     const m = members.find((x) => {
       const mp = String(x.phone || "").replace(/\D/g, "");
-      return mp === clean || "0" + mp === clean || mp === "0" + clean;
+      const mi = String(x.id || "").replace(/\D/g, "");
+      const cands = buildPhoneCandidates(clean, null);
+      return cands.includes(mp) || cands.includes(mi) || mp === clean || "0" + mp === clean || mp === "0" + clean || mi === clean;
     });
     setFound(m || null);
   };
@@ -3756,12 +3794,13 @@ function AdminMembers({ members, sessions, settings, onSaveMember, onUnlockDevic
   const filtered = useMemo(() => {
     const now = new Date();
     const q = debouncedSearch.trim().toLowerCase();
-    let list = members.filter((m) =>
-      !q ||
-      String(m.name||"").toLowerCase().includes(q) ||
-      String(m.phone||"").includes(q) ||
-      String(m.id||"").toLowerCase().includes(q)
-    );
+    let list = members.filter((m) => {
+      if (!q) return true;
+      if (String(m.name||"").toLowerCase().includes(q)) return true;
+      if (String(m.phone||"").includes(q) || String(m.id||"").toLowerCase().includes(q)) return true;
+      const cands = buildPhoneCandidates(q, null);
+      return cands.some((c) => c && (String(m.phone||"") === c || String(m.id||"") === c));
+    });
     if (filterTab === "monthly")     list = list.filter((m) => normMembershipType(m.membershipType) === "monthly");
     if (filterTab === "per_session") list = list.filter((m) => normMembershipType(m.membershipType) === "per_session");
     if (filterTab === "active")      list = list.filter((m) => {
