@@ -2692,24 +2692,48 @@ function LoginScreen({ onLogin, deviceId, members, onMembersUpdate, onGuestBooki
 }
 function AnnouncementBanner({ text, onDismiss }) {
   if (!text || !text.trim()) return null;
+  const [expanded, setExpanded] = React.useState(false);
+  let hash = 0;
+  for (let i = 0; i < text.length; i++) { hash = ((hash << 5) - hash + text.charCodeAt(i)) | 0; }
+  const dismissKey = "apex_announce_dismissed_" + hash;
+  const [dismissed, setDismissed] = React.useState(() => {
+    try { return sessionStorage.getItem(dismissKey) === "1"; } catch (e) { return false; }
+  });
+  if (dismissed) return null;
+  const firstLine = (text.split("\n").find((l) => l.trim()) || text).trim();
+  const handleDismiss = (e) => {
+    e.stopPropagation();
+    try { sessionStorage.setItem(dismissKey, "1"); } catch (e) {}
+    setDismissed(true);
+    if (onDismiss) onDismiss();
+  };
   return React.createElement("div", {
     style: {
       background: "linear-gradient(135deg," + C.bM + " 0%, rgba(59,130,246,.08) 100%)",
       border: "1.5px solid " + C.blue,
-      borderRadius: 14, padding: "14px 16px", marginBottom: 14,
-      display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10
-    }
+      borderRadius: 14, marginBottom: 14, overflow: "hidden", cursor: "pointer"
+    },
+    onClick: () => setExpanded((v) => !v)
   },
-    React.createElement("div", { style: { flex: 1 } },
-      React.createElement("div", { style: { fontWeight: 800, color: C.blue, fontSize: 13, marginBottom: 4 } },
-        "📢 ประกาศจาก Apex Fitness"
-      ),
-      React.createElement("div", { style: { color: C.text, fontSize: 14, lineHeight: 1.5, whiteSpace: "pre-line" } }, text)
+    React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 8, padding: "11px 14px" } },
+      React.createElement("span", { style: { fontSize: 15, flexShrink: 0 } }, "\uD83D\uDCE2"),
+      React.createElement("div", { style: { flex: 1, minWidth: 0, color: C.blue, fontWeight: 800, fontSize: 13, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" } }, firstLine),
+      React.createElement("span", { style: { color: C.blue, fontSize: 11, fontWeight: 700, flexShrink: 0, whiteSpace: "nowrap" } }, expanded ? "\u0E22\u0E48\u0E2D \u25B4" : "\u0E2D\u0E48\u0E32\u0E19\u0E40\u0E1E\u0E34\u0E48\u0E21\u0E40\u0E15\u0E34\u0E21 \u25BE"),
+      React.createElement("span", {
+        onClick: handleDismiss,
+        style: { color: C.muted, fontSize: 17, cursor: "pointer", lineHeight: 1, padding: "2px 2px 2px 6px", flexShrink: 0 }
+      }, "\u00D7")
     ),
     React.createElement("div", {
-      onClick: onDismiss,
-      style: { color: C.muted, fontSize: 18, cursor: "pointer", lineHeight: 1, padding: "0 4px", flexShrink: 0 }
-    }, "×")
+      style: {
+        maxHeight: expanded ? 600 : 0,
+        opacity: expanded ? 1 : 0,
+        overflow: "hidden",
+        transition: "max-height .28s var(--apex-ease,ease), opacity .22s ease"
+      }
+    },
+      React.createElement("div", { style: { color: C.text, fontSize: 14, lineHeight: 1.6, whiteSpace: "pre-line", padding: "0 14px 14px" } }, text)
+    )
   );
 }
 
